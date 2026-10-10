@@ -12,6 +12,7 @@ import { brand } from "@/config/brand";
 import { ApiError, callApi, newIdempotencyKey } from "@/lib/client";
 import { fmtGta, fmtInt, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
 import type { OrderView } from "@/lib/server/orders/orders";
+import { COMING_SOON_RAILS } from "@/components/brand/PaymentLogos";
 
 export interface RewardItem {
   id: string;
@@ -46,7 +47,6 @@ export interface SharkAvailability {
   reason: string | null;
 }
 
-const COMING_SOON = ["Apple Pay", "Google Pay", "Visa / Mastercard"];
 
 const SCENARIOS = [
   ["instant", "Instant delivery"],
@@ -237,10 +237,11 @@ export function RedeemDialog({
                     </label>
                   ))}
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {COMING_SOON.map((m) => (
-                      <span key={m} className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-xs text-muted">
-                        {m}
-                        <span className="font-mono text-[0.6rem] uppercase tracking-wider text-butter">Coming soon</span>
+                    {COMING_SOON_RAILS.map(({ name, Logo }) => (
+                      <span key={name} className="inline-flex min-h-8 items-center gap-2 rounded-full border border-line px-3 text-warm/80">
+                        <Logo />
+                        <span className="sr-only">{name},</span>
+                        <span className="font-mono text-[0.55rem] uppercase tracking-wider text-butter">Coming soon</span>
                       </span>
                     ))}
                   </div>

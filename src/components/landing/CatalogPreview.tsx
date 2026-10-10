@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { fmtGta, fmtInt } from "@/lib/format";
 import { useTilt } from "@/components/landing/fx/useTilt";
 import { brand } from "@/config/brand";
+import { COMING_SOON_RAILS } from "@/components/brand/PaymentLogos";
 
 export interface PreviewTier {
   tier: string;
@@ -109,23 +110,15 @@ export function CatalogPreview({ tiers }: { tiers: PreviewTier[] }) {
         </ul>
         <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-line bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between" data-reveal>
           <span className="eyebrow">Pay with</span>
-          <ul className="flex flex-wrap gap-2" aria-label="Payment options">
-            {[
-              [brand.ticker, null],
-              ["Reward credits", null],
-              ["Apple Pay", "Coming soon"],
-              ["Google Pay", "Coming soon"],
-              ["Visa / Mastercard", "Coming soon"],
-            ].map(([label, note]) => (
-              <li
-                key={label}
-                className={clsx(
-                  "inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-sm",
-                  note ? "border-line text-muted" : "border-coral/40 bg-coral/[0.08] font-semibold text-warm",
-                )}
-              >
-                {label}
-                {note && <span className="font-mono text-[0.6rem] uppercase tracking-wider text-butter">{note}</span>}
+          <ul className="flex flex-wrap items-center gap-2" aria-label="Payment options">
+            <li className="inline-flex min-h-10 items-center rounded-full border border-coral/40 bg-coral/[0.08] px-4 text-sm font-semibold text-warm">
+              {brand.ticker}
+            </li>
+            {COMING_SOON_RAILS.map(({ name, Logo }) => (
+              <li key={name} className="inline-flex min-h-10 items-center gap-2.5 rounded-full border border-line px-3.5 text-warm/85">
+                <Logo />
+                <span className="sr-only">{name},</span>
+                <span className="font-mono text-[0.55rem] uppercase tracking-wider text-butter">Coming soon</span>
               </li>
             ))}
           </ul>
