@@ -24,7 +24,11 @@ const schema = z.object({
   X_CLIENT_ID: z.string().optional(),
   X_CLIENT_SECRET: z.string().optional(),
 
-  STEAM_LOGIN_ENABLED: bool,
+  // Steam OpenID needs no client secret. On unless set to false.
+  STEAM_LOGIN_ENABLED: z
+    .enum(["true", "false", "1", "0", ""])
+    .optional()
+    .transform((v) => (v === undefined || v === "" ? true : v === "true" || v === "1")),
   STEAM_WEB_API_KEY: z.string().optional(),
 
   PLAYSTATION_PARTNER_ENABLED: bool,
@@ -104,7 +108,7 @@ export function integrations() {
     ),
     google: Boolean(e.GOOGLE_CLIENT_ID && e.GOOGLE_CLIENT_SECRET),
     x: Boolean(e.X_CLIENT_ID && e.X_CLIENT_SECRET),
-    steam: e.STEAM_LOGIN_ENABLED || e.APP_MODE === "demo",
+    steam: e.STEAM_LOGIN_ENABLED,
     playstation: false as boolean,
     email: Boolean(e.RESEND_API_KEY && e.EMAIL_FROM) || e.APP_MODE === "demo",
     emailDevOutbox: !(e.RESEND_API_KEY && e.EMAIL_FROM) && e.APP_MODE === "demo",
