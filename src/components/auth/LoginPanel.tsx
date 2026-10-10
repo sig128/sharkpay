@@ -187,6 +187,11 @@ export function LoginPanel({
       <p className="mt-4 text-xs text-muted" aria-live="polite">
         {note ?? "You sign in on the provider's own page. We never see your password."}
       </p>
+      <p className="mt-1.5 text-xs text-muted">
+        By continuing you agree to the{" "}
+        <a href="/terms" className="text-warm/90 underline underline-offset-2">Terms</a> and{" "}
+        <a href="/privacy" className="text-warm/90 underline underline-offset-2">Privacy Policy</a>.
+      </p>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />

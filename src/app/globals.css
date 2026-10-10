@@ -71,6 +71,22 @@ body {
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  .legal a {
+    color: var(--color-warm);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .legal ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .legal li + li {
+    margin-top: 0.4rem;
+  }
+  .legal strong {
+    color: var(--color-warm);
+    font-weight: 600;
+  }
   .eyebrow {
     font-family: var(--font-mono);
     font-size: 0.72rem;

@@ -229,6 +229,14 @@ export function Footer() {
               </svg>
               </a>
             </div>
+            <nav aria-label="Legal" className="flex gap-5 text-sm">
+              <Link href="/terms" className="inline-flex min-h-11 items-center text-warm/90 underline-offset-4 hover:underline">
+                Terms of Service
+              </Link>
+              <Link href="/privacy" className="inline-flex min-h-11 items-center text-warm/90 underline-offset-4 hover:underline">
+                Privacy Policy
+              </Link>
+            </nav>
             <p className="font-mono">
               © {year} {brand.name}. All rights reserved.
             </p>

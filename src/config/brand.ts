@@ -13,6 +13,7 @@ export const brand = {
   social: {
     x: { handle: "@usesharkcard", url: "https://x.com/usesharkcard" },
   },
+  contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL || null,
   legal: {
     independence:
       "Independent rewards platform. Not affiliated with Rockstar Games or Take-Two Interactive.",

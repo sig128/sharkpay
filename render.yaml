@@ -39,6 +39,9 @@ services:
         value: $SHARK
       - key: NEXT_PUBLIC_TOKEN_NAME
         value: SHARKCARD
+      # Shown on /terms and /privacy. Without it, those pages point to a DM on X.
+      - key: NEXT_PUBLIC_CONTACT_EMAIL
+        sync: false
 
       # Token and payments
       - key: TOKEN_MINT

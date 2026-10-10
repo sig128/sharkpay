@@ -48,11 +48,15 @@ export function assertSameOrigin(req: Request) {
   if (site && site !== "same-origin" && site !== "none") throw new AppError("bad_origin", "Cross-site request blocked", 403);
 }
 
+/** Keys can contain IP addresses; the privacy policy promises deletion within 24 hours. Must exceed the longest window. */
+const RATE_LIMIT_RETENTION_MS = 24 * 3600 * 1000;
+
 /** Fixed-window limiter persisted in the database (works across restarts). */
 export function rateLimit(key: string, limit: number, windowMs: number) {
   const now = Date.now();
   const row = one<{ count: number; window_start: number }>(`SELECT count, window_start FROM rate_limits WHERE key = ?`, key);
   if (!row || now - row.window_start >= windowMs) {
+    run(`DELETE FROM rate_limits WHERE window_start < ?`, now - RATE_LIMIT_RETENTION_MS);
     run(
       `INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = 1, window_start = excluded.window_start`,
       key,
