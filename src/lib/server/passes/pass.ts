@@ -7,6 +7,8 @@ import { hmac, randomToken, safeEqual, sha256 } from "../crypto";
 import { env, integrations, sessionSecret } from "../env";
 import { AppError } from "../errors";
 import { userBalances } from "../ledger/ledger";
+import { fmtSol } from "@/lib/format";
+import { listWallets } from "../wallet/verify";
 import { getUser } from "../auth/accounts";
 
 /**
@@ -25,6 +27,12 @@ export function membershipId(userId: string) {
 
 export function maskMembershipId(id: string) {
   return `SC-••••-••••-${id.slice(-4)}`;
+}
+
+function holdingsLabel(raw: bigint) {
+  const d = env().TOKEN_DECIMALS;
+  const n = Number(raw / 10n ** BigInt(d)) + Number(raw % 10n ** BigInt(d)) / 10 ** d;
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 function lastBalanceChange(realm: string, userId: string) {
@@ -56,9 +64,18 @@ export function passModel(realm: string, userId: string): PassModel {
   const user = getUser(userId);
   if (!user) throw new AppError("not_found", "Member not found", 404);
   const b = userBalances(realm, userId);
+  const wallets = listWallets(userId).map((w) => w.address);
+  const holdings = wallets.length
+    ? all<{ balance_raw: string }>(
+        `SELECT h.balance_raw FROM holding_events h
+         WHERE h.realm = ? AND h.owner IN (${wallets.map(() => "?").join(",")})
+           AND h.block_time = (SELECT MAX(block_time) FROM holding_events x WHERE x.realm = h.realm AND x.token_account = h.token_account)`,
+        realm,
+        ...wallets,
+      ).reduce((s, r) => s + BigInt(r.balance_raw), 0n)
+    : 0n;
   const mid = membershipId(userId);
   const updatedAt = lastBalanceChange(realm, userId) || user.created_at;
-  const fmt = (n: number) => n.toLocaleString("en-US");
   const platform = { pc: "PC", playstation: "PlayStation", xbox: "Xbox" }[user.reward_platform ?? ""] ?? "Not set";
   return {
     serial: `pass_${sha256(`pass:${userId}`).slice(0, 24)}`,
@@ -66,11 +83,11 @@ export function passModel(realm: string, userId: string): PassModel {
     description: `${brand.name} rewards membership`,
     logoText: brand.name,
     colors: { background: "rgb(18, 22, 37)", foreground: "rgb(255, 244, 234)", label: "rgb(255, 136, 107)" },
-    header: { label: "CREDITS", value: fmt(b.available) },
-    primary: { label: "AVAILABLE REWARD CREDITS", value: fmt(b.available) },
+    header: { label: brand.ticker, value: holdingsLabel(holdings) },
+    primary: { label: `${brand.ticker} HOLDINGS`, value: holdingsLabel(holdings) },
     secondary: [
       { label: "MEMBER", value: user.display_name },
-      { label: "PENDING", value: fmt(b.pending) },
+      { label: "SOL REWARDS", value: fmtSol(b.payable + b.pending) },
     ],
     auxiliary: [
       { label: "MEMBERSHIP", value: maskMembershipId(mid) },
@@ -78,7 +95,7 @@ export function passModel(realm: string, userId: string): PassModel {
     ],
     back: [
       { label: "Redeem", value: `Open ${env().APP_URL}/app/rewards and sign in to redeem. This pass cannot be used to pay or redeem.` },
-      { label: "About credits", value: brand.legal.credits },
+      { label: "About rewards", value: brand.legal.rewards },
       { label: "Not a payment card", value: "This pass shows membership information only. It is not an Apple Pay card and holds no money." },
       { label: "Last updated", value: new Date(updatedAt).toISOString() },
       { label: "Independence", value: brand.legal.independence },
@@ -208,7 +225,7 @@ export async function buildSignedPass(realm: string, userId: string, authToken: 
     },
   );
   pass.type = "storeCard";
-  pass.headerFields.push({ key: "credits", label: model.header.label, value: model.header.value, changeMessage: "Available credits: %@" });
+  pass.headerFields.push({ key: "holdings", label: model.header.label, value: model.header.value, changeMessage: `${brand.ticker} holdings: %@` });
   pass.primaryFields.push({ key: "available", label: model.primary.label, value: model.primary.value });
   model.secondary.forEach((f, i) => pass.secondaryFields.push({ key: `s${i}`, label: f.label, value: f.value }));
   model.auxiliary.forEach((f, i) => pass.auxiliaryFields.push({ key: `a${i}`, label: f.label, value: f.value }));

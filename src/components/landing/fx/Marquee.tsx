@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { brand } from "@/config/brand";
 
-const ROW_A = ["Hold", brand.ticker, "Earn credits", "Redeem", "Shark Cards"];
+const ROW_A = ["Hold", brand.ticker, "Earn SOL", "Redeem", "Shark Cards"];
 const ROW_B = ["PC", "PlayStation", "Xbox", "Funded rewards", "Apple Wallet pass"];
 
 function Star() {

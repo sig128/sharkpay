@@ -5,7 +5,7 @@ import { clsx } from "clsx";
 import { TierArt } from "@/components/brand/TierArt";
 import { Badge, PreviewBadge } from "@/components/ui/Badges";
 import { ButtonLink } from "@/components/ui/Button";
-import { fmtGta, fmtInt } from "@/lib/format";
+import { fmtGta, fmtSol } from "@/lib/format";
 import { useTilt } from "@/components/landing/fx/useTilt";
 import { brand } from "@/config/brand";
 import { COMING_SOON_RAILS } from "@/components/brand/PaymentLogos";
@@ -37,7 +37,7 @@ export function CatalogPreview({ tiers }: { tiers: PreviewTier[] }) {
               Pick your <span className="text-sunset-flow-soft">Shark Card.</span>
             </h2>
             <p className="mt-5 max-w-xl text-lg text-muted">
-              Platform-specific Shark Cards for GTA Online. GTA$ amount, credit cost and stock are shown separately, and
+              Platform-specific Shark Cards for GTA Online. GTA$ amount, SOL price and stock are shown separately, and
               each code only works on the platform and region it was issued for.
             </p>
           </div>
@@ -82,8 +82,8 @@ export function CatalogPreview({ tiers }: { tiers: PreviewTier[] }) {
                   <dl className="mt-4 grid grid-cols-2 gap-y-2 text-sm">
                     <dt className="text-muted">In-game</dt>
                     <dd className="num text-right">{fmtGta(t.gta)}</dd>
-                    <dt className="text-muted">Credit cost</dt>
-                    <dd className="num text-right text-coral">{fmtInt(t.cost)} CR</dd>
+                    <dt className="text-muted">Price</dt>
+                    <dd className="num text-right text-coral">{fmtSol(t.cost)}</dd>
                     <dt className="text-muted">Version</dt>
                     <dd className="text-right">GTA Online (GTA V)</dd>
                   </dl>
@@ -124,8 +124,8 @@ export function CatalogPreview({ tiers }: { tiers: PreviewTier[] }) {
           </ul>
         </div>
         <p className="mt-6 text-xs text-muted">
-          Credit costs are illustrative, not real prices. Retail prices are set by the fulfilment provider and are separate
-          from GTA$ amounts and credit costs.
+          SOL prices are placeholders until a fulfilment partner is live. Retail cost to us is separate from the GTA$
+          printed on the card.
         </p>
       </div>
     </section>

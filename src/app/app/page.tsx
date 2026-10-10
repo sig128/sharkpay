@@ -8,7 +8,7 @@ import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { ActivityRow } from "@/components/app/ActivityRow";
 import { Badge, PreviewBadge } from "@/components/ui/Badges";
 import { ButtonLink } from "@/components/ui/Button";
-import { fmtDate, fmtDateTime, fmtGta, fmtInt, fmtTokens, fmtUsd, PLATFORM_LABEL, REGION_LABEL } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtGta, fmtSol, fmtTokens, fmtUsd, PLATFORM_LABEL, REGION_LABEL } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -48,30 +48,30 @@ export default async function OverviewPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <section className="panel noise relative overflow-hidden p-6 md:p-8 lg:col-span-8" aria-labelledby="bal-title">
           <div aria-hidden="true" className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-pink/20 blur-3xl" />
-          <h2 id="bal-title" className="eyebrow relative">Available reward credits</h2>
+          <h2 id="bal-title" className="eyebrow relative">SOL rewards ready to pay out</h2>
           <div className="relative mt-3 flex flex-wrap items-baseline gap-x-3">
-            <span className="display text-[clamp(4.5rem,13vw,8rem)] tabular-nums">{fmtInt(o.balances.available)}</span>
-            <span className="font-mono text-lg text-muted">credits</span>
+            <span className="display text-[clamp(3rem,10vw,6rem)] tabular-nums">{fmtSol(o.balances.payable, { unit: false })}</span>
+            <span className="font-mono text-lg text-muted">SOL</span>
           </div>
           <dl className="relative mt-6 grid grid-cols-2 gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-line bg-midnight/40 p-4">
               <dt className="text-xs text-muted">Pending</dt>
-              <dd className="num mt-1 text-xl">{fmtInt(o.balances.pending)} <span className="text-xs text-muted">CR</span></dd>
+              <dd className="num mt-1 text-xl">{fmtSol(o.balances.pending)}</dd>
               {o.latestPeriod?.availableAt && o.latestPeriod.myStatus === "pending" && (
                 <dd className="mt-1 text-xs text-muted">Clears {fmtDateTime(o.latestPeriod.availableAt)}</dd>
               )}
             </div>
             <div className="rounded-xl border border-line bg-midnight/40 p-4">
-              <dt className="text-xs text-muted">Reserved for orders</dt>
-              <dd className="num mt-1 text-xl">{fmtInt(o.balances.reserved)} <span className="text-xs text-muted">CR</span></dd>
+              <dt className="text-xs text-muted">Already paid out</dt>
+              <dd className="num mt-1 text-xl">{fmtSol(o.balances.paid)}</dd>
             </div>
             <div className="col-span-2 rounded-xl border border-line bg-midnight/40 p-4 md:col-span-1">
-              <dt className="text-xs text-muted">What a credit is</dt>
-              <dd className="mt-1 text-xs leading-relaxed text-muted">Internal redemption unit. Not GTA$, not cash, not transferable.</dd>
+              <dt className="text-xs text-muted">What this is</dt>
+              <dd className="mt-1 text-xs leading-relaxed text-muted">Your share of settled fees, in SOL. Not a guaranteed yield. The website never sends it — the operator does.</dd>
             </div>
           </dl>
           <div className="relative mt-6 flex flex-wrap gap-3">
-            <ButtonLink href="/app/rewards">Redeem credits</ButtonLink>
+            <ButtonLink href="/app/rewards">Buy a Shark Card</ButtonLink>
             <ButtonLink href="/app/activity" variant="secondary">View activity</ButtonLink>
           </div>
         </section>
@@ -84,7 +84,7 @@ export default async function OverviewPage() {
           <MembershipCard
             memberName={o.user.displayName}
             membershipId={o.user.membershipId}
-            balance={o.balances.available}
+            balance={o.balances.payable}
             demo={o.isDemo}
             pose={{ x: 6, y: -10, z: -3 }}
             className="my-auto px-2 py-4"
@@ -120,7 +120,7 @@ export default async function OverviewPage() {
                   ["Time-weighted average", o.latestWeight ? <span className="num">{fmtTokens(o.latestWeight.averageTokens, brand.ticker)}</span> : "—"],
                 ]}
               />
-              <p className="mt-3 text-xs text-muted">Token value is separate from credits and from GTA$.</p>
+              <p className="mt-3 text-xs text-muted">Token value is separate from SOL rewards and from GTA$.</p>
             </>
           ) : (
             <p className="text-sm text-muted">Link a wallet to see holdings and your eligible weight.</p>
@@ -131,14 +131,14 @@ export default async function OverviewPage() {
           {o.latestPeriod ? (
             <>
               <div className="flex items-baseline gap-2">
-                <span className="num text-2xl text-mint">+{fmtInt(o.latestPeriod.myAllocation)}</span>
-                <span className="text-sm text-muted">credits allocated to you</span>
+                <span className="num text-2xl text-mint">+{fmtSol(o.latestPeriod.myAllocation)}</span>
+                <span className="text-sm text-muted">SOL allocated to you</span>
               </div>
               <KV
                 className="mt-4"
                 items={[
                   ["Period", <span key="p" className="num">#{o.latestPeriod.seq} · {fmtDate(o.latestPeriod.startsAt)} – {fmtDate(o.latestPeriod.endsAt)}</span>],
-                  ["Funded budget", <span key="b" className="num">{fmtInt(o.latestPeriod.budget)} CR</span>],
+                  ["Funded budget", <span key="b" className="num">{fmtSol(o.latestPeriod.budget)}</span>],
                   ["Status", o.latestPeriod.myStatus === "pending" ? <Badge key="s" tone="butter">Pending clearance</Badge> : <Badge key="s" tone="mint">Available</Badge>],
                 ]}
               />
@@ -173,8 +173,8 @@ export default async function OverviewPage() {
                 <div className="h-full rounded-full bg-gradient-to-r from-mint to-[#4fd1b0]" style={{ width: `${sel.progress * 100}%` }} />
               </div>
               <div className="mt-2 flex justify-between font-mono text-xs text-muted">
-                <span>{fmtInt(o.balances.available)} / {fmtInt(sel.creditCost)} CR</span>
-                <span>{sel.progress >= 1 ? "Ready to redeem" : `${fmtInt(sel.creditCost - o.balances.available)} CR to go`}</span>
+                <span>{fmtSol(o.balances.payable)} / {fmtSol(sel.solPriceLamports)}</span>
+                <span>{sel.progress >= 1 ? "Enough SOL earned" : `${fmtSol(sel.solPriceLamports - o.balances.payable)} to go`}</span>
               </div>
               <p className="mt-4 text-xs text-muted">
                 {PLATFORM_LABEL[sel.platform]} · {REGION_LABEL[sel.region]}

@@ -29,10 +29,12 @@ export async function landingSample() {
     hero: {
       memberName: o.user.displayName,
       membershipId: o.user.membershipId,
-      available: o.balances.available,
+      available: o.balances.payable,
       pending: o.balances.pending,
+      paid: o.balances.paid,
+      holdings: o.holdings.tokens,
       selectedName: o.selectedReward?.name ?? "Bull Shark Card",
-      selectedCost: o.selectedReward?.creditCost ?? DEMO_FIXTURE.selectedCost,
+      selectedCost: o.selectedReward?.solPriceLamports ?? DEMO_FIXTURE.selectedCost,
       pass,
     },
     steps: {
@@ -46,7 +48,7 @@ export async function landingSample() {
       tier: d.tier,
       name: d.name,
       gta: d.gta,
-      cost: d.cost,
+      cost: d.lamports,
       outOfStockOn: d.tier === "megalodon" ? ["xbox"] : [],
     })),
     transparency: t,

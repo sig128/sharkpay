@@ -21,7 +21,7 @@ export default async function RewardsPage() {
     tier: i.tier,
     category: i.category,
     gtaAmount: i.gta_amount,
-    creditCost: i.credit_cost,
+    solPriceLamports: i.sol_price_lamports,
     retailReference: i.retail_reference,
     platform: i.platform,
     gameVersion: i.game_version,
@@ -34,12 +34,12 @@ export default async function RewardsPage() {
   const shark = sharkCheckout(session.realm);
   return (
     <>
-      <PageHeader eyebrow="Rewards" title="Redeem credits" actions={demo ? <PreviewBadge label="Demo catalog" /> : undefined}>
-        Shark Cards for GTA Online. Each item is a specific platform and region; codes don&apos;t work elsewhere.
+      <PageHeader eyebrow="Rewards" title="Shark Cards" actions={demo ? <PreviewBadge label="Demo catalog" /> : undefined}>
+        Fixed SOL prices, paid in {`$SHARK`}. Each item is a specific platform and region; codes don&apos;t work elsewhere.
       </PageHeader>
       <RewardsBrowser
         items={items}
-        available={userBalances(session.realm, session.userId).available}
+        available={userBalances(session.realm, session.userId).payable}
         defaults={{ platform: user.reward_platform ?? "", region: user.reward_region ?? "" }}
         selectedTier={user.selected_item_tier}
         demo={demo}

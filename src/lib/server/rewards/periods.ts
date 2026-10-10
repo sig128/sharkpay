@@ -13,10 +13,10 @@ export interface PeriodRow {
   starts_at: number;
   ends_at: number;
   status: "open" | "finalized";
-  budget_credits: number | null;
+  budget_lamports: number | null;
   total_weight: string | null;
-  allocated_credits: number | null;
-  carried_credits: number | null;
+  allocated_lamports: number | null;
+  carried_lamports: number | null;
   eligible_wallets: number | null;
   finalized_at: number | null;
 }
@@ -73,20 +73,20 @@ function balanceEvents(realm: string, end: number): BalanceEvent[] {
   ).map((r) => ({ owner: r.owner, tokenAccount: r.token_account, balanceRaw: BigInt(r.balance_raw), time: r.block_time }));
 }
 
-/** Funded credits settled before `end`, minus everything already credited to members. */
+/** Holder SOL (lamports) settled before `end`, minus everything already allocated to members. */
 function periodBudget(realm: string, end: number) {
   const funded =
     one<{ c: number | null }>(
-      `SELECT SUM(credits_funded) AS c FROM settlements WHERE realm = ? AND settled_at < ?`,
+      `SELECT SUM(holder_lamports) AS c FROM settlements WHERE realm = ? AND settled_at < ?`,
       realm,
       end,
     )?.c ?? 0;
-  const credited =
+  const allocated =
     one<{ c: number | null }>(
-      `SELECT SUM(a.credits) AS c FROM allocations a WHERE a.realm = ? AND a.status != 'unclaimed'`,
+      `SELECT SUM(a.lamports) AS c FROM allocations a WHERE a.realm = ? AND a.status != 'unclaimed'`,
       realm,
     )?.c ?? 0;
-  return Math.max(0, funded - credited);
+  return Math.max(0, funded - allocated);
 }
 
 /**
@@ -120,7 +120,7 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
     const result = allocate(budget, weights);
 
     const availableAt = nowMs + e.PENDING_CLEARANCE_HOURS * 3600 * 1000;
-    const credited: Array<{ userId: string; credits: number }> = [];
+    const assigned: Array<{ userId: string; lamports: number }> = [];
     let unclaimed = 0;
     for (const share of result.shares) {
       const link = one<{ user_id: string }>(
@@ -129,11 +129,11 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
         share.wallet,
         nowMs,
       );
-      const status = link && share.credits > 0 ? "pending" : "unclaimed";
-      if (status === "unclaimed") unclaimed += share.credits;
-      else credited.push({ userId: link!.user_id, credits: share.credits });
+      const status = link && share.lamports > 0 ? "pending" : "unclaimed";
+      if (status === "unclaimed") unclaimed += share.lamports;
+      else assigned.push({ userId: link!.user_id, lamports: share.lamports });
       run(
-        `INSERT INTO allocations (id, realm, period_id, wallet, user_id, weight, credits, status, available_at, created_at)
+        `INSERT INTO allocations (id, realm, period_id, wallet, user_id, weight, lamports, status, available_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         randomId("alc"),
         realm,
@@ -141,17 +141,17 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
         share.wallet,
         status === "pending" ? link!.user_id : null,
         share.weight.toString(),
-        share.credits,
+        share.lamports,
         status,
         status === "pending" ? availableAt : null,
         nowMs,
       );
     }
 
-    const creditedTotal = credited.reduce((s, c) => s + c.credits, 0);
-    if (creditedTotal > 0) {
+    const assignedTotal = assigned.reduce((s, c) => s + c.lamports, 0);
+    if (assignedTotal > 0) {
       const perUser = new Map<string, number>();
-      for (const c of credited) perUser.set(c.userId, (perUser.get(c.userId) ?? 0) + c.credits);
+      for (const c of assigned) perUser.set(c.userId, (perUser.get(c.userId) ?? 0) + c.lamports);
       post(
         realm,
         {
@@ -161,8 +161,8 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
           refId: p.id,
           memo: `Reward period ${p.seq} allocation`,
           entries: [
-            { account: acct.pool, amount: -creditedTotal },
-            ...[...perUser].map(([userId, credits]) => ({ account: acct.pending(userId), amount: credits })),
+            { account: acct.pool, amount: -assignedTotal },
+            ...[...perUser].map(([userId, lamports]) => ({ account: acct.pending(userId), amount: lamports })),
           ],
         },
         nowMs,
@@ -170,12 +170,12 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
     }
 
     const updated = run(
-      `UPDATE reward_periods SET status = 'finalized', budget_credits = ?, total_weight = ?, allocated_credits = ?,
-       carried_credits = ?, eligible_wallets = ?, finalized_at = ? WHERE id = ? AND status = 'open'`,
+      `UPDATE reward_periods SET status = 'finalized', budget_lamports = ?, total_weight = ?, allocated_lamports = ?,
+       carried_lamports = ?, eligible_wallets = ?, finalized_at = ? WHERE id = ? AND status = 'open'`,
       budget,
       result.totalWeight.toString(),
-      creditedTotal,
-      budget - creditedTotal,
+      assignedTotal,
+      budget - assignedTotal,
       result.shares.length,
       nowMs,
       p.id,
@@ -184,18 +184,18 @@ export function finalizePeriod(realm: string, periodId: string, nowMs = Date.now
     return {
       alreadyFinalized: false as const,
       budget,
-      allocated: creditedTotal,
+      allocated: assignedTotal,
       unclaimed,
       roundingRemainder: result.remainder,
-      carried: budget - creditedTotal,
+      carried: budget - assignedTotal,
     };
   });
 }
 
-/** Moves cleared allocations from pending to available. Idempotent per allocation. */
+/** Moves cleared allocations from pending to payable (earned, awaiting payout). Idempotent per allocation. */
 export function clearMatured(realm: string, nowMs = Date.now()) {
-  const due = all<{ id: string; user_id: string; credits: number; period_id: string }>(
-    `SELECT id, user_id, credits, period_id FROM allocations WHERE realm = ? AND status = 'pending' AND available_at <= ?`,
+  const due = all<{ id: string; user_id: string; lamports: number; period_id: string }>(
+    `SELECT id, user_id, lamports, period_id FROM allocations WHERE realm = ? AND status = 'pending' AND available_at <= ?`,
     realm,
     nowMs,
   );
@@ -208,15 +208,15 @@ export function clearMatured(realm: string, nowMs = Date.now()) {
           idempotencyKey: `clear:${a.id}`,
           refType: "allocation",
           refId: a.id,
-          memo: "Reward allocation cleared and became available",
+          memo: "Reward cleared. SOL payout pending.",
           entries: [
-            { account: acct.pending(a.user_id), amount: -a.credits },
-            { account: acct.available(a.user_id), amount: a.credits },
+            { account: acct.pending(a.user_id), amount: -a.lamports },
+            { account: acct.payable(a.user_id), amount: a.lamports },
           ],
         },
         nowMs,
       );
-      run(`UPDATE allocations SET status = 'available' WHERE id = ? AND status = 'pending'`, a.id);
+      run(`UPDATE allocations SET status = 'payable' WHERE id = ? AND status = 'pending'`, a.id);
     });
   }
   return due.length;
@@ -232,14 +232,14 @@ export function userAllocations(realm: string, userId: string) {
     wallet: string;
     weight: string;
     total_weight: string;
-    credits: number;
-    budget_credits: number;
+    lamports: number;
+    budget_lamports: number;
     status: string;
     available_at: number | null;
     created_at: number;
   }>(
-    `SELECT a.id, a.period_id, p.seq, p.starts_at, p.ends_at, a.wallet, a.weight, p.total_weight, a.credits,
-            p.budget_credits, a.status, a.available_at, a.created_at
+    `SELECT a.id, a.period_id, p.seq, p.starts_at, p.ends_at, a.wallet, a.weight, p.total_weight, a.lamports,
+            p.budget_lamports, a.status, a.available_at, a.created_at
      FROM allocations a JOIN reward_periods p ON p.id = a.period_id
      WHERE a.realm = ? AND a.user_id = ? ORDER BY p.seq DESC`,
     realm,

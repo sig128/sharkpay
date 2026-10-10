@@ -1,5 +1,6 @@
 /**
  * Pure reward maths. No I/O, so it can be audited and unit-tested in isolation.
+ * Budgets and allocations are SOL in lamports.
  *
  *   user allocation = floor(budget × user weight / total eligible weight)
  *
@@ -67,42 +68,35 @@ export function timeWeightedWeights(events: BalanceEvent[], opts: WeightOptions)
 }
 
 export interface AllocationResult {
-  shares: Array<{ wallet: string; weight: bigint; credits: number }>;
+  shares: Array<{ wallet: string; weight: bigint; lamports: number }>;
   totalWeight: bigint;
   allocated: number;
   remainder: number;
 }
 
-export function allocate(budgetCredits: number, weights: Map<string, bigint>): AllocationResult {
-  if (!Number.isSafeInteger(budgetCredits) || budgetCredits < 0) throw new Error("Budget must be a non-negative integer");
+/** Splits a SOL budget (lamports) by weight. */
+export function allocate(budgetLamports: number, weights: Map<string, bigint>): AllocationResult {
+  if (!Number.isSafeInteger(budgetLamports) || budgetLamports < 0) throw new Error("Budget must be a non-negative integer");
   const wallets = [...weights.keys()].sort();
   const totalWeight = wallets.reduce((s, w) => s + weights.get(w)!, 0n);
-  if (totalWeight === 0n || budgetCredits === 0) {
-    return { shares: [], totalWeight, allocated: 0, remainder: budgetCredits };
+  if (totalWeight === 0n || budgetLamports === 0) {
+    return { shares: [], totalWeight, allocated: 0, remainder: budgetLamports };
   }
-  const budget = BigInt(budgetCredits);
+  const budget = BigInt(budgetLamports);
   let allocated = 0;
   const shares = wallets.map((wallet) => {
     const weight = weights.get(wallet)!;
-    const credits = Number((budget * weight) / totalWeight);
-    allocated += credits;
-    return { wallet, weight, credits };
+    const lamports = Number((budget * weight) / totalWeight);
+    allocated += lamports;
+    return { wallet, weight, lamports };
   });
-  return { shares, totalWeight, allocated, remainder: budgetCredits - allocated };
+  return { shares, totalWeight, allocated, remainder: budgetLamports - allocated };
 }
 
-/** Holder share of settled net proceeds, in USD micro-units (floored). */
-export function holderShare(netUsdMicros: number, holderShareBps: number) {
-  const holder = Math.floor((netUsdMicros * holderShareBps) / 10_000);
-  return { holder, operations: netUsdMicros - holder };
-}
-
-/**
- * Credits backed by cumulative holder funding. Computed on the cumulative
- * total so sub-credit dust from one settlement is never lost.
- */
-export function creditsBacked(cumulativeHolderUsdMicros: number, usdMicrosPerCredit: number) {
-  return Math.floor(cumulativeHolderUsdMicros / usdMicrosPerCredit);
+/** Holder share of settled net SOL proceeds, in lamports (floored). */
+export function holderShare(netLamports: number, holderShareBps: number) {
+  const holder = Math.floor((netLamports * holderShareBps) / 10_000);
+  return { holder, operations: netLamports - holder };
 }
 
 /** Basis-point fee with a maximum, as Token-2022 TransferFeeConfig computes it (ceil). */

@@ -55,7 +55,10 @@ const schema = z.object({
 
   REWARD_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(200),
   HOLDER_SHARE_BPS: z.coerce.number().int().min(0).max(10000).default(8000),
-  CREDIT_USD_MICROS: z.coerce.number().int().positive().default(10000),
+  /** Wallet the operator sends SOL reward payouts from. Defaults to the treasury. */
+  REWARDS_PAYOUT_WALLET: z.string().optional(),
+  /** Bearer secret for the operator endpoint that records payouts already sent. */
+  PAYOUT_RECORDER_SECRET: z.string().min(32).optional(),
   PENDING_CLEARANCE_HOURS: z.coerce.number().int().min(0).default(72),
   PERIOD_LENGTH_DAYS: z.coerce.number().int().positive().default(7),
   MIN_ELIGIBLE_BALANCE: z.coerce.number().min(0).default(1000),

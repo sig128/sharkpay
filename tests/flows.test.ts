@@ -5,7 +5,8 @@ import { resetDbForTests, run, one } from "@/lib/server/db";
 import { createDemoRealm, DEMO_FIXTURE } from "@/lib/server/simulation/demo";
 import { createSession, type Session } from "@/lib/server/auth/sessions";
 import { findTierItem } from "@/lib/server/catalog/catalog";
-import { applyProviderResult, confirmRedemption, createQuote, getOrder, reconcileOrder, revealCode } from "@/lib/server/orders/orders";
+import { applyProviderResult, getOrder, reconcileOrder, revealCode } from "@/lib/server/orders/orders";
+import { createSharkQuote, simulateDemoPayment } from "@/lib/server/payments/shark";
 import { ledgerTotals, userBalances, post, acct } from "@/lib/server/ledger/ledger";
 import { overview } from "@/lib/server/services/dashboard";
 import { createFlow, consumeFlow } from "@/lib/server/auth/flows";
@@ -15,8 +16,6 @@ import { createWalletChallenge, verifyWalletChallenge } from "@/lib/server/walle
 import { handleFulfillmentWebhook } from "@/lib/server/fulfillment/webhooks";
 import { hmac } from "@/lib/server/crypto";
 import { AppError } from "@/lib/server/errors";
-
-const key = () => `idk_${Math.random().toString(36).slice(2)}${Date.now()}`;
 
 async function demoSession(): Promise<{ session: Session; realm: string }> {
   const { realm, userId } = await createDemoRealm();
@@ -48,118 +47,86 @@ describe("demo fixture", () => {
   it("is produced by the real engine with the documented balances", async () => {
     const { session, realm } = await demoSession();
     const o = overview(session);
-    expect(o.balances.available).toBe(DEMO_FIXTURE.available);
+    expect(o.balances.payable).toBe(DEMO_FIXTURE.payable);
     expect(o.balances.pending).toBe(DEMO_FIXTURE.pending);
-    expect(o.selectedReward?.creditCost).toBe(DEMO_FIXTURE.selectedCost);
-    expect(o.latestPeriod?.myAllocation).toBe(360);
+    expect(o.balances.paid).toBe(DEMO_FIXTURE.paid);
+    expect(o.selectedReward?.solPriceLamports).toBe(DEMO_FIXTURE.selectedCost);
+    expect(o.latestPeriod?.myAllocation).toBe(DEMO_FIXTURE.pending);
     const totals = ledgerTotals(realm);
     expect(totals.backed).toBe(true);
     expect(totals.pool).toBeGreaterThanOrEqual(0);
   });
 });
 
-describe("redemption", () => {
-  it("completes a redemption end to end and returns an unmistakably invalid demo code", async () => {
+describe("demo $SHARK checkout", () => {
+  it("completes a simulated payment and returns an unmistakably invalid demo code", async () => {
     const { session, realm } = await demoSession();
     const item = findTierItem(realm, "red", "playstation", "US")!;
-    const q = createQuote(session, item.id);
-    expect(q.sufficient).toBe(true);
-    const { order } = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key() });
-    expect(order.status).toBe("completed");
-    expect(revealCode(session, order.id)).toMatch(/^DEMO-NOT-REDEEMABLE-/);
-    expect(userBalances(realm, session.userId).available).toBe(DEMO_FIXTURE.available - item.credit_cost);
+    const q = await createSharkQuote(session, item.id);
+    const { order } = await simulateDemoPayment(session, q.id, "instant");
+    expect(order?.status).toBe("completed");
+    expect(revealCode(session, order!.id)).toMatch(/^DEMO-NOT-REDEEMABLE-/);
+    expect(userBalances(realm, session.userId).payable).toBe(DEMO_FIXTURE.payable);
   });
 
-  it("rejects insufficient balance without reserving anything", async () => {
-    const { session, realm } = await demoSession();
-    const item = findTierItem(realm, "bull", "playstation", "US")!;
-    const q = createQuote(session, item.id);
-    expect(q.sufficient).toBe(false);
-    await expectCode(confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key() }), "insufficient_funds");
-    expect(userBalances(realm, session.userId).available).toBe(DEMO_FIXTURE.available);
-    expect(one(`SELECT 1 FROM orders WHERE quote_id = ?`, q.quoteId)).toBeUndefined();
-  });
-
-  it("protects against duplicate submission (same key, and same quote with a new key)", async () => {
-    const { session, realm } = await demoSession();
-    const item = findTierItem(realm, "red", "pc", "US")!;
-    const q = createQuote(session, item.id);
-    const k = key();
-    const [a, b] = await Promise.all([
-      confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: k }),
-      confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: k }),
-    ]);
-    expect(a.order.id).toBe(b.order.id);
-    const c = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key() });
-    expect(c.order.id).toBe(a.order.id);
-    expect(c.duplicate).toBe(true);
-    expect(userBalances(realm, session.userId).available).toBe(DEMO_FIXTURE.available - item.credit_cost);
-  });
-
-  it("returns reserved credits when fulfilment definitively fails", async () => {
+  it("marks a refund due when fulfilment fails, without touching SOL rewards", async () => {
     const { session, realm } = await demoSession();
     const item = findTierItem(realm, "red", "xbox", "UK")!;
     const stock = item.stock!;
-    const q = createQuote(session, item.id);
-    const { order } = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key(), demoScenario: "fail" });
-    expect(order.status).toBe("reversed");
-    expect(userBalances(realm, session.userId)).toMatchObject({ available: DEMO_FIXTURE.available, reserved: 0 });
+    const q = await createSharkQuote(session, item.id);
+    const { order, payment } = await simulateDemoPayment(session, q.id, "fail");
+    expect(order?.status).toBe("reversed");
+    expect(payment.status).toBe("refund_due");
+    expect(userBalances(realm, session.userId).payable).toBe(DEMO_FIXTURE.payable);
     expect(findTierItem(realm, "red", "xbox", "UK")!.stock).toBe(stock);
   });
 
-  it("keeps credits reserved on an uncertain outcome until the provider is reconciled", async () => {
-    const { session, realm } = await demoSession();
-    const item = findTierItem(realm, "red", "pc", "EU")!;
-    const q = createQuote(session, item.id);
-    const { order } = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key(), demoScenario: "uncertain" });
-    expect(order.status).toBe("needs_reconciliation");
-    expect(userBalances(realm, session.userId).reserved).toBe(item.credit_cost);
-    const after = await reconcileOrder(session, order.id);
+  it("keeps an uncertain outcome open until the provider is reconciled", async () => {
+    const { session } = await demoSession();
+    const item = findTierItem(session.realm, "red", "pc", "EU")!;
+    const q = await createSharkQuote(session, item.id);
+    const { order } = await simulateDemoPayment(session, q.id, "uncertain");
+    expect(order?.status).toBe("needs_reconciliation");
+    const after = await reconcileOrder(session, order!.id);
     expect(after.status).toBe("reversed");
-    expect(userBalances(realm, session.userId).reserved).toBe(0);
   });
 
-  it("ignores duplicated provider outcomes (no double refund or capture)", async () => {
-    const { session, realm } = await demoSession();
-    const item = findTierItem(realm, "red", "pc", "UK")!;
-    const q = createQuote(session, item.id);
-    const { order } = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key(), demoScenario: "fail" });
-    applyProviderResult(order.id, { status: "failed", reason: "again" });
-    applyProviderResult(order.id, { status: "delivered", providerRef: "x", code: "LATE" });
-    expect(userBalances(realm, session.userId).available).toBe(DEMO_FIXTURE.available);
-    expect(getOrder(session, order.id).status).toBe("reversed");
+  it("ignores duplicated provider outcomes", async () => {
+    const { session } = await demoSession();
+    const item = findTierItem(session.realm, "red", "pc", "UK")!;
+    const q = await createSharkQuote(session, item.id);
+    const { order } = await simulateDemoPayment(session, q.id, "fail");
+    applyProviderResult(order!.id, { status: "failed", reason: "again" });
+    applyProviderResult(order!.id, { status: "delivered", providerRef: "x", code: "LATE" });
+    expect(getOrder(session, order!.id).status).toBe("reversed");
   });
 
-  it("rejects expired quotes and out-of-stock items", async () => {
-    const { session, realm } = await demoSession();
-    const item = findTierItem(realm, "red", "pc", "US")!;
-    const t = Date.now();
-    const q = createQuote(session, item.id, t);
-    await expectCode(confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key() }, t + 91_000), "quote_expired");
-    const oos = findTierItem(realm, "megalodon", "xbox", "US")!;
-    await expectCode(() => createQuote(session, oos.id), "out_of_stock");
+  it("rejects out-of-stock items", async () => {
+    const { session } = await demoSession();
+    const oos = findTierItem(session.realm, "megalodon", "xbox", "US")!;
+    await expectCode(() => createSharkQuote(session, oos.id), "out_of_stock");
   });
 
   it("does not let one member read another member's order", async () => {
     const a = await demoSession();
     const item = findTierItem(a.realm, "red", "pc", "US")!;
-    const q = createQuote(a.session, item.id);
-    const { order } = await confirmRedemption(a.session, { quoteId: q.quoteId, idempotencyKey: key() });
+    const q = await createSharkQuote(a.session, item.id);
+    const { order } = await simulateDemoPayment(a.session, q.id, "instant");
     const b = await demoSession();
-    await expectCode(() => getOrder(b.session, order.id), "not_found");
-    await expectCode(() => revealCode(b.session, order.id), "not_found");
+    await expectCode(() => getOrder(b.session, order!.id), "not_found");
+    await expectCode(() => revealCode(b.session, order!.id), "not_found");
     const sameRealmOther = createSession({
       userId: signInWithIdentity(a.realm, { provider: "demo", subject: "intruder" }).userId,
       realm: a.realm,
       kind: "demo",
       authProvider: "demo",
     }).session;
-    await expectCode(() => getOrder(sameRealmOther, order.id), "not_found");
+    await expectCode(() => getOrder(sameRealmOther, order!.id), "not_found");
   });
 
-  it("fails closed for live redemption when no provider is connected", () => {
+  it("fails closed for live checkout when no fulfilment provider is connected", async () => {
     const s = liveSession("76561198000000001");
-    expect(() => createQuote(s, "itm_anything")).toThrowError(/not available/);
+    await expectCode(() => createSharkQuote(s, "itm_anything"), "not_live");
   });
 });
 
@@ -295,16 +262,17 @@ describe("provider webhooks", () => {
   it("verifies signatures and rejects replays", async () => {
     const { session, realm } = await demoSession();
     const item = findTierItem(realm, "red", "pc", "US")!;
-    const q = createQuote(session, item.id);
-    const { order } = await confirmRedemption(session, { quoteId: q.quoteId, idempotencyKey: key(), demoScenario: "pending" });
-    expect(order.status).toBe("pending_delivery");
-    const body = JSON.stringify({ id: "evt_12345678", type: "order.delivered", data: { idempotencyKey: order.provider_idempotency_key, code: "DEMO-NOT-REDEEMABLE-WEBH-OOK1" } });
+    const q = await createSharkQuote(session, item.id);
+    const { order } = await simulateDemoPayment(session, q.id, "pending");
+    expect(order).toBeTruthy();
+    expect(order!.status).toBe("pending_delivery");
+    const body = JSON.stringify({ id: "evt_12345678", type: "order.delivered", data: { idempotencyKey: order!.provider_idempotency_key, code: "DEMO-NOT-REDEEMABLE-WEBH-OOK1" } });
     const t = Math.floor(Date.now() / 1000);
     expect(() => handleFulfillmentWebhook("demo", "secret", `t=${t},v1=${"0".repeat(64)}`, body)).toThrow(/Invalid signature/);
     const header = `t=${t},v1=${hmac("secret", `${t}.${body}`)}`;
     expect(handleFulfillmentWebhook("demo", "secret", header, body)).toEqual({ replay: false });
     expect(handleFulfillmentWebhook("demo", "secret", header, body)).toEqual({ replay: true });
-    expect(getOrder(session, order.id).status).toBe("completed");
+    expect(getOrder(session, order!.id).status).toBe("completed");
     const old = t - 3_600;
     expect(() => handleFulfillmentWebhook("demo", "secret", `t=${old},v1=${hmac("secret", `${old}.${body}`)}`, body)).toThrow(/tolerance/);
   });

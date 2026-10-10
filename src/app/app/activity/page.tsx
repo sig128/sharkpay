@@ -12,8 +12,8 @@ export default async function ActivityPage() {
   clearMatured(session.realm);
   return (
     <>
-      <PageHeader eyebrow="Activity" title="Every credit, explained">
-        Reward allocations, clearances, redemptions and reversals in plain language. Select any entry for details.
+      <PageHeader eyebrow="Activity" title="Every reward, explained">
+        Reward allocations, clearances, Shark Card orders and reversals in plain language. Select any entry for details.
       </PageHeader>
       <ActivityList items={activity(session)} />
     </>

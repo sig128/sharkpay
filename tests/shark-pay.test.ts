@@ -36,12 +36,22 @@ import {
   resetPriceCacheForTests,
   sharkCheckout,
   sharkUsdPrice,
-  tokensForUsd,
+  tokensForSol,
 } from "@/lib/server/payments/shark";
 import type { Session } from "@/lib/server/auth/sessions";
 
-const priceFetch = (usdPrice: number, liquidity = 50_000) =>
-  (async () => new Response(JSON.stringify({ [MINT]: { usdPrice, liquidity } }))) as unknown as typeof fetch;
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const BULL_LAMPORTS = 70_000_000;
+const NET_AT_HALF = 21_000_000n;
+
+const priceFetch = (usdPrice: number, liquidity = 50_000, solUsd = 150) =>
+  (async () =>
+    new Response(
+      JSON.stringify({
+        [MINT]: { usdPrice, liquidity },
+        [SOL_MINT]: { usdPrice: solUsd, liquidity: 1_000_000_000 },
+      }),
+    )) as unknown as typeof fetch;
 
 function seed() {
   resetDbForTests();
@@ -51,10 +61,10 @@ function seed() {
     run(`INSERT INTO users (id, realm, display_name, created_at) VALUES (?, 'live', ?, ?)`, id, id, now);
   }
   run(
-    `INSERT INTO catalog_items (id, realm, sku, provider, provider_sku, name, tier, category, gta_amount, credit_cost,
-      usd_price_cents, platform, game_version, region, stock, status, verified_live, is_demo, fulfillment_kind, updated_at)
-     VALUES ('itm_bull', 'live', 'BULL-PS-US', 'testdist', 'D-BULL', 'Bull Shark Card', 'bull', 'shark_card', 600000, 5000,
-      999, 'playstation', 'gtao_gtav', 'US', 3, 'available', 1, 0, 'code', ?)`,
+    `INSERT INTO catalog_items (id, realm, sku, provider, provider_sku, name, tier, category, gta_amount, sol_price_lamports,
+      platform, game_version, region, stock, status, verified_live, is_demo, fulfillment_kind, updated_at)
+     VALUES ('itm_bull', 'live', 'BULL-PS-US', 'testdist', 'D-BULL', 'Bull Shark Card', 'bull', 'shark_card', 600000, ${BULL_LAMPORTS},
+      'playstation', 'gtao_gtav', 'US', 3, 'available', 1, 0, 'code', ?)`,
     now,
   );
 }
@@ -94,8 +104,8 @@ const rpcFor = (txs: Record<string, unknown>) => async (method: string, params: 
 
 describe("amounts", () => {
   it("rounds the token amount up so the price is always covered", () => {
-    expect(tokensForUsd(999, 0.5, 6)).toBe(19_980_000n);
-    expect(tokensForUsd(1, 3, 6)).toBe(3_334n);
+    expect(tokensForSol(BULL_LAMPORTS, 150, 0.5, 6)).toBe(NET_AT_HALF);
+    expect(tokensForSol(10_000_000, 100, 0.5, 6)).toBe(2_000_000n);
   });
 
   it("grosses up for the transfer fee so the treasury nets the full amount", () => {
@@ -133,8 +143,8 @@ describe("price feed", () => {
 });
 
 describe("checkout availability", () => {
-  it("is never offered to demo sessions", () => {
-    expect(sharkCheckout("demo:abc")).toMatchObject({ enabled: false, code: "live_only" });
+  it("is on for demo sandboxes and for a configured live realm", () => {
+    expect(sharkCheckout("demo:abc")).toMatchObject({ enabled: true });
     expect(sharkCheckout("live")).toMatchObject({ enabled: true, mint: MINT, treasury: TREASURY });
   });
 });
@@ -160,7 +170,7 @@ describe("pay with $SHARK end to end", () => {
 
   it("quotes from the server price and delivers the card once the payment is final", async () => {
     const q = await createSharkQuote(session(), "itm_bull", priceFetch(0.5));
-    expect(q.amount).toBe(formatUnits(grossForNet(19_980_000n, 200), 6));
+    expect(q.amount).toBe(formatUnits(grossForNet(NET_AT_HALF, 200), 6));
     expect(q.solanaPayUrl).toContain(`solana:${TREASURY}?`);
     expect(q.solanaPayUrl).toContain(`spl-token=${MINT}`);
     expect(q.solanaPayUrl).toContain(`reference=${q.reference}`);
@@ -169,12 +179,12 @@ describe("pay with $SHARK end to end", () => {
     expect(pending.payment.status).toBe("awaiting_payment");
     expect(pending.order).toBeNull();
 
-    const res = await checkSharkPayment(session(), q.id, rpcFor({ sig1: chainTx(q.reference, 19_980_000n) }));
+    const res = await checkSharkPayment(session(), q.id, rpcFor({ sig1: chainTx(q.reference, NET_AT_HALF) }));
     expect(res.payment.status).toBe("paid");
     expect(res.order?.status).toBe("completed");
     expect(one<{ stock: number }>(`SELECT stock FROM catalog_items WHERE id = 'itm_bull'`)!.stock).toBe(2);
 
-    const again = await checkSharkPayment(session(), q.id, rpcFor({ sig1: chainTx(q.reference, 19_980_000n) }));
+    const again = await checkSharkPayment(session(), q.id, rpcFor({ sig1: chainTx(q.reference, NET_AT_HALF) }));
     expect(again.order?.id).toBe(res.order?.id);
     expect(one<{ n: number }>(`SELECT COUNT(*) AS n FROM orders`)!.n).toBe(1);
   });
@@ -182,7 +192,7 @@ describe("pay with $SHARK end to end", () => {
   it("never lets one transaction pay for two orders", async () => {
     const a = await createSharkQuote(session(), "itm_bull", priceFetch(0.5));
     const b = await createSharkQuote(session(), "itm_bull", priceFetch(0.5));
-    const tx = chainTx(a.reference, 19_980_000n);
+    const tx = chainTx(a.reference, NET_AT_HALF);
     tx.transaction.message.accountKeys.push({ pubkey: b.reference });
     await checkSharkPayment(session(), a.id, rpcFor({ sig1: tx }));
     const second = await checkSharkPayment(session(), b.id, rpcFor({ sig1: tx }));
@@ -200,7 +210,7 @@ describe("pay with $SHARK end to end", () => {
     const r2 = await checkSharkPayment(
       session(),
       late.id,
-      rpcFor({ s2: chainTx(late.reference, 19_980_000n, { blockTime: late.expiresAt + 5 * 60_000 }) }),
+      rpcFor({ s2: chainTx(late.reference, NET_AT_HALF, { blockTime: late.expiresAt + 5 * 60_000 }) }),
     );
     expect(r2.payment.status).toBe("refund_due");
   });
@@ -208,7 +218,7 @@ describe("pay with $SHARK end to end", () => {
   it("marks a refund due when delivery fails", async () => {
     delivered.next = { status: "failed", providerRef: "p1", reason: "Provider out of codes" };
     const q = await createSharkQuote(session(), "itm_bull", priceFetch(0.5));
-    const res = await checkSharkPayment(session(), q.id, rpcFor({ s: chainTx(q.reference, 19_980_000n) }));
+    const res = await checkSharkPayment(session(), q.id, rpcFor({ s: chainTx(q.reference, NET_AT_HALF) }));
     expect(res.order?.status).toBe("reversed");
     expect(one<{ status: string }>(`SELECT status FROM shark_payments WHERE id = ?`, q.id)!.status).toBe("refund_due");
     expect(one<{ n: number }>(`SELECT COUNT(*) AS n FROM ledger_entries`)!.n).toBe(0);

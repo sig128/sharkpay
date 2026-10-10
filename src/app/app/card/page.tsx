@@ -13,7 +13,7 @@ import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { PassPreview } from "@/components/app/PassPreview";
 import { Waitlist } from "@/components/app/Waitlist";
 import { Badge, PreviewBadge } from "@/components/ui/Badges";
-import { fmtDate, fmtDateTime, fmtInt } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtSol } from "@/lib/format";
 
 export const metadata: Metadata = { title: "My Card" };
 
@@ -42,7 +42,7 @@ export default async function CardPage() {
           <MembershipCard
             memberName={user.display_name}
             membershipId={maskMembershipId(mid)}
-            balance={b.available}
+            balance={b.payable}
             demo={demo}
             priority="hero"
             className="w-full max-w-[520px]"
@@ -75,8 +75,8 @@ export default async function CardPage() {
           <KV
             items={[
               ["Membership ID", <span key="m" className="num text-xs">{maskMembershipId(mid)}</span>],
-              ["Available", <span key="a" className="num">{fmtInt(b.available)} CR</span>],
-              ["Pending", <span key="p" className="num">{fmtInt(b.pending)} CR</span>],
+              ["SOL ready", <span key="a" className="num">{fmtSol(b.payable)}</span>],
+              ["Pending", <span key="p" className="num">{fmtSol(b.pending)}</span>],
               ["Last updated", <span key="u" className="num text-xs">{fmtDateTime(model.updatedAt)}</span>],
             ]}
           />
@@ -94,8 +94,8 @@ export default async function CardPage() {
                     Period #{a.seq} <span className="font-mono text-xs text-muted">· {fmtDate(a.ends_at * 1000)}</span>
                   </span>
                   <span className="flex items-center gap-2">
-                    {a.status === "pending" ? <Badge tone="butter">Pending</Badge> : <Badge tone="mint">Available</Badge>}
-                    <span className="num text-mint">+{fmtInt(a.credits)}</span>
+                    {a.status === "pending" ? <Badge tone="butter">Pending</Badge> : <Badge tone="mint">Ready</Badge>}
+                    <span className="num text-mint">+{fmtSol(a.lamports)}</span>
                   </span>
                 </li>
               ))}
@@ -116,8 +116,8 @@ export default async function CardPage() {
                 activate here.
               </p>
               <ul className="mt-4 space-y-1.5 text-sm text-muted">
-                <li>· A card balance would be separate from reward credits and from GTA$.</li>
-                <li>· Reward credits would not automatically become spendable money.</li>
+                <li>· A card balance would be separate from SOL rewards, {brand.ticker} holdings and GTA$.</li>
+                <li>· SOL rewards would not automatically become spendable money.</li>
                 <li>· Issuer status: <span className="num text-warm">{cardIssuer.status.replace("_", " ")}</span></li>
               </ul>
             </div>

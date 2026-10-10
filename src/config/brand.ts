@@ -6,10 +6,8 @@ export const brand = {
   name: process.env.NEXT_PUBLIC_BRAND_NAME || "SHARKCARD",
   ticker: process.env.NEXT_PUBLIC_TOKEN_TICKER || "$SHARK",
   tokenName: process.env.NEXT_PUBLIC_TOKEN_NAME || "SHARKCARD",
-  creditUnit: "credits",
-  creditUnitShort: "CR",
-  tagline: "Hold the token. Collect funded rewards. Redeem for game credit.",
-  heroSupport: "Token-funded rewards for your next GTA Online upgrade.",
+  tagline: "Hold $SHARK. Earn SOL from settled fees. Pay for Shark Cards in $SHARK.",
+  heroSupport: "Fixed SOL prices, paid in $SHARK. Holder rewards paid in SOL.",
   social: {
     x: { handle: "@usesharkcard", url: "https://x.com/usesharkcard" },
   },
@@ -19,8 +17,8 @@ export const brand = {
       "Independent rewards platform. Not affiliated with Rockstar Games or Take-Two Interactive.",
     trademarks:
       "Grand Theft Auto, GTA Online and Shark Cards are products of Rockstar Games. Apple Wallet and Apple Pay are trademarks of Apple Inc. Xbox, PlayStation and Steam are trademarks of their respective owners. Their names are used only to describe compatibility.",
-    credits:
-      "Reward credits are non-transferable internal redemption units. They are not GTA$, not a bank deposit, not withdrawable cash and have no guaranteed value or yield.",
+    rewards:
+      "Holder rewards are a share of SOL from fees that have actually been collected and settled. They vary each period and can be zero. They are not a guaranteed yield, APY or profit.",
   },
   colors: {
     midnight: "#080A12",

@@ -6,7 +6,7 @@ import { env } from "./env";
 /**
  * Local transactional store (SQLite, WAL). Every table carries a `realm`:
  * `live` for real accounts, `demo:<id>` for an isolated demo sandbox. Queries
- * always filter by realm so demo activity can never touch real credits.
+ * always filter by realm so demo activity can never touch real balances.
  */
 
 const SCHEMA = `
@@ -168,13 +168,12 @@ CREATE TABLE IF NOT EXISTS settlements (
   id TEXT PRIMARY KEY,
   realm TEXT NOT NULL,
   tokens_sold_raw TEXT NOT NULL,
-  gross_usd_micros INTEGER NOT NULL,
-  costs_usd_micros INTEGER NOT NULL,
-  net_usd_micros INTEGER NOT NULL,
+  gross_lamports INTEGER NOT NULL,
+  costs_lamports INTEGER NOT NULL,
+  net_lamports INTEGER NOT NULL,
   holder_share_bps INTEGER NOT NULL,
-  holder_usd_micros INTEGER NOT NULL,
-  ops_usd_micros INTEGER NOT NULL,
-  credits_funded INTEGER NOT NULL,
+  holder_lamports INTEGER NOT NULL,
+  ops_lamports INTEGER NOT NULL,
   venue TEXT NOT NULL,
   signature TEXT NOT NULL,
   settled_at INTEGER NOT NULL,
@@ -196,10 +195,10 @@ CREATE TABLE IF NOT EXISTS reward_periods (
   starts_at INTEGER NOT NULL,
   ends_at INTEGER NOT NULL,
   status TEXT NOT NULL,
-  budget_credits INTEGER,
+  budget_lamports INTEGER,
   total_weight TEXT,
-  allocated_credits INTEGER,
-  carried_credits INTEGER,
+  allocated_lamports INTEGER,
+  carried_lamports INTEGER,
   eligible_wallets INTEGER,
   finalized_at INTEGER,
   UNIQUE (realm, seq)
@@ -212,13 +211,26 @@ CREATE TABLE IF NOT EXISTS allocations (
   wallet TEXT NOT NULL,
   user_id TEXT,
   weight TEXT NOT NULL,
-  credits INTEGER NOT NULL,
+  lamports INTEGER NOT NULL,
   status TEXT NOT NULL,
   available_at INTEGER,
   created_at INTEGER NOT NULL,
   UNIQUE (period_id, wallet)
 );
 CREATE INDEX IF NOT EXISTS allocations_user ON allocations(user_id);
+
+CREATE TABLE IF NOT EXISTS payouts (
+  id TEXT PRIMARY KEY,
+  realm TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  wallet TEXT NOT NULL,
+  lamports INTEGER NOT NULL,
+  signature TEXT NOT NULL UNIQUE,
+  verified_by TEXT NOT NULL,
+  paid_at INTEGER NOT NULL,
+  recorded_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS payouts_user ON payouts(user_id);
 
 CREATE TABLE IF NOT EXISTS ledger_txns (
   id TEXT PRIMARY KEY,
@@ -263,7 +275,7 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   tier TEXT NOT NULL,
   category TEXT NOT NULL,
   gta_amount INTEGER NOT NULL,
-  credit_cost INTEGER NOT NULL,
+  sol_price_lamports INTEGER NOT NULL,
   retail_reference TEXT,
   platform TEXT NOT NULL,
   game_version TEXT NOT NULL,
@@ -277,25 +289,12 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   UNIQUE (realm, sku)
 );
 
-CREATE TABLE IF NOT EXISTS quotes (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  item_id TEXT NOT NULL,
-  credit_cost INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  used_at INTEGER
-);
-
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   realm TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   item_id TEXT NOT NULL,
-  quote_id TEXT NOT NULL UNIQUE,
-  idempotency_key TEXT NOT NULL,
-  credit_cost INTEGER NOT NULL,
+  payment_id TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL,
   provider TEXT NOT NULL,
   provider_ref TEXT,
@@ -306,8 +305,7 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   completed_at INTEGER,
-  reversed_at INTEGER,
-  UNIQUE (user_id, idempotency_key)
+  reversed_at INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS order_events (
@@ -356,7 +354,8 @@ CREATE TABLE IF NOT EXISTS shark_payments (
   realm TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   item_id TEXT NOT NULL,
-  usd_cents INTEGER NOT NULL,
+  sol_price_lamports INTEGER NOT NULL,
+  sol_usd_price REAL NOT NULL,
   token_usd_price REAL NOT NULL,
   amount_net TEXT NOT NULL,
   amount_gross TEXT NOT NULL,
@@ -368,6 +367,7 @@ CREATE TABLE IF NOT EXISTS shark_payments (
   payer TEXT,
   received TEXT,
   order_id TEXT UNIQUE,
+  demo_scenario TEXT,
   note TEXT,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
@@ -392,18 +392,73 @@ function open(file: string): DatabaseSync {
   if (file !== ":memory:") fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+  migrateCreditEra(db);
   db.exec(SCHEMA);
-  migrate(db);
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
 
-/** Additive column migrations for databases created before the column existed. */
-function migrate(db: DatabaseSync) {
-  const add = (table: string, column: string, ddl: string) => {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
-  };
-  add("catalog_items", "usd_price_cents", "usd_price_cents INTEGER");
+/** 2: prices in SOL, rewards in lamports, no reward credits. */
+const SCHEMA_VERSION = 2;
+
+const CREDIT_ERA_TABLES = [
+  "order_events",
+  "orders",
+  "quotes",
+  "shark_payments",
+  "catalog_items",
+  "allocations",
+  "reward_periods",
+  "ledger_entries",
+  "ledger_txns",
+  "settlements",
+  "operating_costs",
+];
+const DEMO_SCOPED_TABLES = [
+  "holding_events",
+  "fee_events",
+  "exclusions",
+  "chain_watermarks",
+  "wallet_challenges",
+  "wallets",
+  "passes",
+  "sessions",
+  "identities",
+  "users",
+];
+
+/**
+ * Databases from the reward-credit era store credits where SOL amounts now go.
+ * Their money tables are rebuilt, but only when no live money record exists:
+ * real balances are never silently discarded, startup fails instead.
+ */
+function migrateCreditEra(db: DatabaseSync) {
+  const cols = db.prepare(`PRAGMA table_info(catalog_items)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "credit_cost")) return;
+  const tables = new Set(
+    (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>).map((t) => t.name),
+  );
+  for (const t of ["ledger_entries", "settlements", "orders", "shark_payments"]) {
+    if (!tables.has(t)) continue;
+    const live = db.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE realm = 'live'`).get() as { n: number };
+    if (live.n > 0) {
+      throw new Error(
+        `Database ${t} holds live reward-credit records. Refusing to convert them automatically; migrate them by hand before upgrading.`,
+      );
+    }
+  }
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const t of CREDIT_ERA_TABLES) db.exec(`DROP TABLE IF EXISTS ${t}`);
+    for (const t of DEMO_SCOPED_TABLES) if (tables.has(t)) db.exec(`DELETE FROM ${t} WHERE realm LIKE 'demo:%'`);
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
 }
 
 export function db(): DatabaseSync {

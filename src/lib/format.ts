@@ -1,6 +1,14 @@
 export const fmtInt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-export const fmtCredits = (n: number) => `${fmtInt(n)} credits`;
+export const LAMPORTS_PER_SOL = 1_000_000_000;
+
+/** SOL amount from lamports, e.g. 150000000 → "0.15 SOL". Small amounts keep more decimals. */
+export function fmtSol(lamports: number, opts: { unit?: boolean } = {}) {
+  const sol = lamports / LAMPORTS_PER_SOL;
+  const digits = sol !== 0 && Math.abs(sol) < 0.01 ? 6 : 4;
+  const text = sol.toLocaleString("en-US", { minimumFractionDigits: sol === 0 ? 0 : 2, maximumFractionDigits: digits });
+  return opts.unit === false ? text : `${text} SOL`;
+}
 
 export const fmtGta = (n: number) => `GTA$${fmtInt(n)}`;
 

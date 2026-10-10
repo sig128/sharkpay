@@ -9,7 +9,7 @@ import { OrderStatus } from "@/components/app/OrderStatus";
 import { PrintButton } from "@/components/app/PrintButton";
 import { Badge } from "@/components/ui/Badges";
 import { brand } from "@/config/brand";
-import { fmtDateTime, fmtGta, fmtInt, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
+import { fmtDateTime, fmtGta, fmtSol, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Receipt" };
 
@@ -44,7 +44,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               ["Game version", item ? VERSION_LABEL[item.gameVersion] : "—"],
               ["Region", item ? REGION_LABEL[item.region] : "—"],
               ["SKU", <span key="s" className="num text-xs">{item?.sku}</span>],
-              ["Credits", <span key="c" className="num">{fmtInt(view.creditCost)} CR</span>],
+              ["Price", <span key="c" className="num">{view.payment.solPriceLamports != null ? fmtSol(view.payment.solPriceLamports) : "—"}</span>],
               ["Provider", view.simulated ? "Demo provider (simulated)" : view.provider],
               ["Provider reference", <span key="r" className="num text-xs">{view.providerRef ?? "—"}</span>],
               ...(view.completedAt ? ([["Delivered", <span key="d" className="num text-xs">{fmtDateTime(view.completedAt)}</span>]] as Array<[string, React.ReactNode]>) : []),

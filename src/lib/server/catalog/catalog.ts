@@ -36,10 +36,9 @@ export interface CatalogItem {
   tier: string;
   category: keyof typeof CATEGORIES;
   gta_amount: number;
-  credit_cost: number;
+  /** Fixed card price in SOL (lamports). Members pay the $SHARK equivalent at checkout. */
+  sol_price_lamports: number;
   retail_reference: string | null;
-  /** Provider price in US cents; required to price a $SHARK payment. */
-  usd_price_cents: number | null;
   platform: Platform;
   game_version: GameVersion;
   region: Region;
@@ -52,17 +51,17 @@ export interface CatalogItem {
 }
 
 /**
- * Demo catalog: GTA$ denominations mirror the Shark Card tiers for GTA Online,
- * but credit costs are illustrative only and every row is flagged `is_demo`.
- * A connected provider catalog replaces this with exact provider SKUs.
+ * GTA$ denominations mirror the Shark Card tiers for GTA Online. SOL prices
+ * are placeholders for the operator to set from distributor costs; every demo
+ * row is flagged `is_demo`. A connected provider catalog replaces these rows.
  */
 export const DEMO_TIERS = [
-  { tier: "red", name: "Red Shark Card", gta: 100_000, cost: 1_500 },
-  { tier: "tiger", name: "Tiger Shark Card", gta: 250_000, cost: 3_500 },
-  { tier: "bull", name: "Bull Shark Card", gta: 600_000, cost: 5_000 },
-  { tier: "great_white", name: "Great White Shark Card", gta: 1_250_000, cost: 10_000 },
-  { tier: "whale", name: "Whale Shark Card", gta: 4_250_000, cost: 32_000 },
-  { tier: "megalodon", name: "Megalodon Shark Card", gta: 10_000_000, cost: 72_000 },
+  { tier: "red", name: "Red Shark Card", gta: 100_000, lamports: 20_000_000 },
+  { tier: "tiger", name: "Tiger Shark Card", gta: 250_000, lamports: 35_000_000 },
+  { tier: "bull", name: "Bull Shark Card", gta: 600_000, lamports: 70_000_000 },
+  { tier: "great_white", name: "Great White Shark Card", gta: 1_250_000, lamports: 140_000_000 },
+  { tier: "whale", name: "Whale Shark Card", gta: 4_250_000, lamports: 350_000_000 },
+  { tier: "megalodon", name: "Megalodon Shark Card", gta: 10_000_000, lamports: 700_000_000 },
 ] as const;
 
 export function seedDemoCatalog(realm: string, now = Date.now()) {
@@ -73,7 +72,7 @@ export function seedDemoCatalog(realm: string, now = Date.now()) {
         const sku = `DEMO-${t.tier.toUpperCase()}-${platform.toUpperCase()}-${region}`;
         run(
           `INSERT OR IGNORE INTO catalog_items (id, realm, sku, provider, provider_sku, name, tier, category, gta_amount,
-            credit_cost, retail_reference, platform, game_version, region, stock, status, verified_live, is_demo,
+            sol_price_lamports, retail_reference, platform, game_version, region, stock, status, verified_live, is_demo,
             fulfillment_kind, updated_at)
            VALUES (?, ?, ?, 'demo', ?, ?, ?, 'shark_card', ?, ?, NULL, ?, 'gtao_gtav', ?, ?, ?, 0, 1, 'code', ?)`,
           randomId("itm"),
@@ -83,7 +82,7 @@ export function seedDemoCatalog(realm: string, now = Date.now()) {
           t.name,
           t.tier,
           t.gta,
-          t.cost,
+          t.lamports,
           platform,
           region,
           outOfStock ? 0 : 25,
@@ -119,7 +118,7 @@ export function listCatalog(realm: string, filter: CatalogFilter = {}): CatalogI
     }
   }
   return all<CatalogItem>(
-    `SELECT * FROM catalog_items WHERE ${where.join(" AND ")} ORDER BY credit_cost, platform, region`,
+    `SELECT * FROM catalog_items WHERE ${where.join(" AND ")} ORDER BY sol_price_lamports, platform, region`,
     ...params,
   );
 }

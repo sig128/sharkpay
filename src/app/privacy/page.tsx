@@ -49,7 +49,7 @@ export default function PrivacyPage() {
             message that proves you control it. Linking never gives us the ability to move your tokens.
           </li>
           <li>
-            <strong>Rewards, orders and payments.</strong> Your credit balance and history, redemption orders, and for
+            <strong>Rewards, orders and payments.</strong> Your SOL reward history, Shark Card orders, and for
             payments made with {brand.ticker} the amount, the paying wallet address and the transaction signature.
             Redemption codes are stored encrypted and are only shown to the account that owns them.
           </li>
@@ -70,7 +70,7 @@ export default function PrivacyPage() {
       <Section id="use" title="How we use it">
         <ul>
           <li>To create your account, sign you in and keep it secure.</li>
-          <li>To calculate reward credits, process redemptions and deliver Shark Card codes for your platform and region.</li>
+          <li>To calculate SOL rewards, process Shark Card orders and deliver codes for your platform and region.</li>
           <li>To verify {brand.ticker} payments on the Solana blockchain and handle refunds.</li>
           <li>To prevent fraud, abuse and duplicate accounts, and to meet legal and accounting obligations.</li>
           <li>To send sign-in codes and, if you joined a waitlist, a message when that feature launches.</li>

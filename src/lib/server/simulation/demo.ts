@@ -8,7 +8,8 @@ import { addExclusion, ingest, recordSettlement } from "../chain/ingest";
 import { allocate, timeWeightedWeights, type BalanceEvent } from "../rewards/engine";
 import { clearMatured, createPeriod, finalizePeriod, CALC_BUFFER_S } from "../rewards/periods";
 import { findTierItem, seedDemoCatalog } from "../catalog/catalog";
-import { confirmRedemption, createQuote } from "../orders/orders";
+import { createSharkQuote, simulateDemoPayment } from "../payments/shark";
+import { recordDemoPayout } from "../rewards/payouts";
 import { signInWithIdentity, updatePreferences } from "../auth/accounts";
 import type { Session } from "../auth/sessions";
 
@@ -18,12 +19,13 @@ import type { Session } from "../auth/sessions";
  * time-weighted share floors to the target. Nothing here is real data.
  */
 export const DEMO_FIXTURE = {
-  available: 2_840,
-  pending: 360,
+  payable: 80_000_000,
+  pending: 20_000_000,
+  paid: 110_000_000,
   selectedTier: "bull",
-  selectedCost: 5_000,
+  selectedCost: 70_000_000,
   quickTier: "red",
-  periodTargets: [1_180, 1_420, 1_740, 360],
+  periodTargets: [50_000_000, 60_000_000, 80_000_000, 20_000_000],
   pastRedemptionTier: "red",
   tokenPriceUsdMicros: 4_200,
   displayName: "Demo Member",
@@ -158,12 +160,10 @@ export async function createDemoRealm(nowMs = Date.now(), realmName?: string) {
     const carry = balance(realm, acct.pool);
     const fund = budget - carry;
     if (fund <= 0) throw new Error("Demo fixture: carried pool exceeds the period target");
-    // net proceeds needed so the holder share funds exactly `fund` credits
-    const holderMicros = fund * e.CREDIT_USD_MICROS;
-    const netMicros = Math.ceil((holderMicros * 10_000) / e.HOLDER_SHARE_BPS);
-    const costsMicros = Math.round(netMicros * 0.015);
-    const grossMicros = netMicros + costsMicros;
-    const tokensSold = (BigInt(grossMicros) * 10n ** BigInt(e.TOKEN_DECIMALS)) / BigInt(DEMO_FIXTURE.tokenPriceUsdMicros);
+    const netLamports = Math.ceil((fund * 10_000) / e.HOLDER_SHARE_BPS);
+    const costsLamports = Math.round(netLamports * 0.015);
+    const grossLamports = netLamports + costsLamports;
+    const tokensSold = (BigInt(grossLamports) * BigInt(DEMO_FIXTURE.tokenPriceUsdMicros) * 10n ** BigInt(e.TOKEN_DECIMALS)) / 1_000_000_000n / 1_000_000n;
     const withdrawn = (tokensSold * 125n) / 100n;
     const t0 = p.ends_at - 2 * DAY;
     ingest(realm, {
@@ -176,8 +176,8 @@ export async function createDemoRealm(nowMs = Date.now(), realmName?: string) {
     recordSettlement(realm, {
       type: "settlement",
       tokensSoldRaw: tokensSold.toString(),
-      grossUsdMicros: grossMicros,
-      costsUsdMicros: costsMicros,
+      grossLamports,
+      costsLamports,
       venue: "Sample DEX route",
       signature: sig(realm),
       settledAt: t0,
@@ -186,9 +186,19 @@ export async function createDemoRealm(nowMs = Date.now(), realmName?: string) {
     ingest(realm, { events: [], watermark: { slot: 320_000_000 + k, blockTime: p.ends_at + 600 } }, nowMs);
     // sanity: the engine reproduces the target exactly
     const check = allocate(budget, weights).shares.find((s) => s.wallet === memberWallet)!;
-    if (BigInt(check.credits) !== target) throw new Error("Demo fixture mismatch");
+    if (BigInt(check.lamports) !== target) throw new Error("Demo fixture mismatch");
     finalizePeriod(realm, p.id, (p.ends_at + CALC_BUFFER_S) * 1000);
-    if (k < 3) clearMatured(realm, (p.ends_at + CALC_BUFFER_S) * 1000 + e.PENDING_CLEARANCE_HOURS * 3600 * 1000);
+    if (k < 3) {
+      const clearedAt = (p.ends_at + CALC_BUFFER_S) * 1000 + e.PENDING_CLEARANCE_HOURS * 3600 * 1000;
+      clearMatured(realm, clearedAt);
+      if (k < 2) {
+        recordDemoPayout(
+          realm,
+          { wallet: memberWallet, lamports: DEMO_FIXTURE.periodTargets[k], signature: bs58.encode(crypto.randomBytes(64)) },
+          clearedAt + 60_000,
+        );
+      }
+    }
   }
 
   ingest(realm, { events: [], watermark: { slot: 330_000_000, blockTime: nowS - 60 } }, nowMs);
@@ -211,10 +221,10 @@ export async function createDemoRealm(nowMs = Date.now(), realmName?: string) {
   };
   const redeemAt = (starts[3] + 2 * DAY) * 1000;
   const item = findTierItem(realm, DEMO_FIXTURE.pastRedemptionTier, "playstation", "US")!;
-  const q1 = createQuote(session, item.id, redeemAt);
-  await confirmRedemption(session, { quoteId: q1.quoteId, idempotencyKey: `seed_${randomId("idk")}`, demoScenario: "fail" }, redeemAt);
-  const q2 = createQuote(session, item.id, redeemAt + 120_000);
-  await confirmRedemption(session, { quoteId: q2.quoteId, idempotencyKey: `seed_${randomId("idk")}`, demoScenario: "instant" }, redeemAt + 120_000);
+  const pay1 = await createSharkQuote(session, item.id, fetch, redeemAt);
+  await simulateDemoPayment(session, pay1.id, "fail", redeemAt);
+  const pay2 = await createSharkQuote(session, item.id, fetch, redeemAt + 120_000);
+  await simulateDemoPayment(session, pay2.id, "instant", redeemAt + 120_000);
 
   return { realm, userId: member.userId, memberWallet };
 }
@@ -242,8 +252,10 @@ const DEMO_TABLES_IN_ORDER = [
   "ledger_txns",
   "allocations",
   "reward_periods",
-  "quotes",
+  "order_events",
   "orders",
+  "payouts",
+  "shark_payments",
   "catalog_items",
   "settlements",
   "fee_events",

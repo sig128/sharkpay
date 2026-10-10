@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocate, creditsBacked, holderShare, timeWeightedWeights, transferFee } from "@/lib/server/rewards/engine";
+import { allocate, holderShare, timeWeightedWeights, transferFee } from "@/lib/server/rewards/engine";
 
 describe("time-weighted holdings", () => {
   const start = 1_000;
@@ -58,7 +58,7 @@ describe("time-weighted holdings", () => {
 describe("allocation", () => {
   it("floors deterministically and reports the remainder to carry forward", () => {
     const r = allocate(100, new Map([["a", 1n], ["b", 1n], ["c", 1n]]));
-    expect(r.shares.map((s) => s.credits)).toEqual([33, 33, 33]);
+    expect(r.shares.map((s) => s.lamports)).toEqual([33, 33, 33]);
     expect(r.allocated).toBe(99);
     expect(r.remainder).toBe(1);
   });
@@ -83,11 +83,6 @@ describe("funding maths", () => {
     const s = holderShare(1_000_003, 8_000);
     expect(s.holder + s.operations).toBe(1_000_003);
     expect(s.holder).toBe(800_002);
-  });
-
-  it("computes credits from cumulative funding so dust is carried", () => {
-    expect(creditsBacked(19_999, 10_000)).toBe(1);
-    expect(creditsBacked(19_999 + 1, 10_000)).toBe(2);
   });
 
   it("matches Token-2022 fee rounding (ceil) and maximum", () => {

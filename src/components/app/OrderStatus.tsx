@@ -7,16 +7,16 @@ import type { OrderView } from "@/lib/server/orders/orders";
 import { Badge } from "@/components/ui/Badges";
 import { Button, buttonClass } from "@/components/ui/Button";
 import { callApi } from "@/lib/client";
-import { fmtDateTime, fmtInt } from "@/lib/format";
+import { fmtDateTime } from "@/lib/format";
 import { brand } from "@/config/brand";
 
 export const STATUS_META: Record<string, { label: string; tone: "mint" | "butter" | "danger" | "neutral" | "pink" }> = {
-  reserved: { label: "Credits reserved", tone: "butter" },
+  reserved: { label: "Payment confirmed", tone: "butter" },
   pending_delivery: { label: "Pending delivery", tone: "butter" },
   needs_reconciliation: { label: "Confirming with provider", tone: "butter" },
   completed: { label: "Delivered", tone: "mint" },
   failed: { label: "Delivery failed", tone: "danger" },
-  reversed: { label: "Reversed · credits returned", tone: "neutral" },
+  reversed: { label: "Reversed · refund due", tone: "neutral" },
 };
 
 const OPEN = new Set(["reserved", "pending_delivery", "needs_reconciliation"]);
@@ -138,7 +138,7 @@ export function OrderStatus({ initial, compact = false, onChange }: { initial: O
             {(order.failureReason ?? "The provider couldn't fulfil this order").replace(/\.?$/, ".")}{" "}
             {paidWithShark
               ? `Your ${brand.ticker} payment will be refunded to the wallet it was sent from.`
-              : `${fmtInt(order.creditCost)} credits were returned to your available balance.`}
+              : "This order was cancelled."}
           </p>
         </div>
       )}
@@ -146,7 +146,7 @@ export function OrderStatus({ initial, compact = false, onChange }: { initial: O
       {order.status === "needs_reconciliation" && (
         <p className="rounded-2xl border border-butter/25 bg-butter/[0.06] p-4 text-sm text-butter">
           The provider didn&apos;t confirm the outcome yet.{" "}
-          {paidWithShark ? "Your payment is recorded" : "Your credits stay reserved, not refunded,"} until we confirm with the
+          {paidWithShark ? "Your payment is recorded" : "This order is on hold"} until we confirm with the
           provider, so nothing is charged or delivered twice.
         </p>
       )}

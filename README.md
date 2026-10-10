@@ -2,7 +2,7 @@
 
 **Hold the token. Collect funded rewards. Redeem for game credit.**
 
-SHARKCARD is a holder rewards platform. Token fees are collected and settled. The settled proceeds fund a rewards pool, and each holder's time-weighted share of that pool becomes reward credits. Credits can be redeemed for platform-specific GTA Online Shark Cards. An Apple Wallet pass shows your membership and balance.
+SHARKCARD is a holder rewards platform. Token fees are collected and settled. The settled proceeds fund a rewards pool, and each holder's time-weighted share of that pool is paid in SOL. Members buy platform-specific GTA Online Shark Cards with $SHARK at a fixed SOL price. An Apple Wallet pass shows your $SHARK holdings and SOL rewards.
 
 > Independent rewards platform. Not affiliated with Rockstar Games or Take-Two Interactive.
 > "Shark Card", "GTA" and "Grand Theft Auto" are trademarks of their owners. See [Brand and trademark risk](#brand-and-trademark-risk).
@@ -21,14 +21,14 @@ The service must stay at **one instance**: SQLite on a disk can't be shared. Ren
 
 ### Paying for Shark Cards with $SHARK
 
-In the rewards dialog members choose **Reward credits** or **$SHARK**. Apple Pay, Google Pay and Visa / Mastercard are shown as coming soon.
+Shark Cards are paid in **$SHARK**. Apple Pay, Google Pay and Visa / Mastercard are shown as coming soon.
 
-1. The server prices the card: `usd_price_cents` from the provider catalog ÷ the live $SHARK price from `SHARK_PRICE_URL` (Jupiter). Prices from pools with less than `SHARK_MIN_LIQUIDITY_USD` are refused. The amount is grossed up for the Token-2022 transfer fee (`REWARD_FEE_BPS`) so the treasury nets the full price. The quote is held for `SHARK_QUOTE_TTL_SECONDS`.
+1. Each catalog item has a fixed `sol_price_lamports`. At checkout the server converts that SOL amount to $SHARK using live Jupiter prices for SOL and the token (`SHARK_PRICE_URL`). Prices from pools with less than `SHARK_MIN_LIQUIDITY_USD` are refused. The amount is grossed up for the Token-2022 transfer fee (`REWARD_FEE_BPS`) so the treasury nets the full price. The quote is held for `SHARK_QUOTE_TTL_SECONDS`.
 2. The member pays a Solana Pay request (QR or "Open in wallet") to `SHARK_TREASURY_WALLET`. Each request carries a unique reference key.
 3. The server finds the reference on-chain via `SOLANA_RPC_URL` (finalized only) and checks the mint, the recipient and the amount the treasury actually received. A transaction signature can settle only one payment.
 4. The order is created and sent to the fulfilment provider. Delivery failures, underpayments and late payments become `refund_due` rows in `shark_payments`, which an operator refunds from the treasury to the recorded `payer`.
 
-Checkout is closed until `TOKEN_MINT`, `SHARK_TREASURY_WALLET` and a fulfilment provider are all configured. Live catalog rows need `usd_price_cents`.
+Checkout is closed until `TOKEN_MINT`, `SHARK_TREASURY_WALLET` and a fulfilment partner are all configured. Live catalog rows need a SOL price. The website never sends SOL; the operator pays holder rewards from `REWARDS_PAYOUT_WALLET` and records each transfer.
 
 ### Buying the token
 
@@ -50,7 +50,7 @@ cp .env.example .env.local      # optional in demo mode
 npm run dev                     # http://localhost:3000
 ```
 
-To try it, open `/login` and choose **Explore demo**. Each demo gets its own isolated sandbox: a member with 2,840 available and 360 pending credits, five reward periods, a demo catalog, and past orders. Nothing in the demo can touch real credits or real accounts.
+To try it, open `/login` and choose **Explore demo**. Each demo gets its own isolated sandbox: a member with 0.08 SOL payable and 0.02 SOL pending, five reward periods, a demo catalog, and past orders. Nothing in the demo can touch real funds or real accounts.
 
 | Command | What it does |
 | --- | --- |
@@ -91,10 +91,10 @@ Production fails closed. Live redemption returns 503 until a real fulfillment pr
 | Solana wallet linking | The wallet signs a domain-bound text message with a 5-minute expiry and single use, verified with ed25519 on the server. One wallet per member, three wallets at most, and a cooldown before an unlinked wallet can be relinked. No transactions, approvals or seed phrases. |
 | Reward engine | BigInt time-weighted balances, exclusions, floor allocation, remainder carried forward, finalized periods only, no double allocation. The Token-2022 transfer fee uses the ceiling rule. |
 | Ledger | Append-only double-entry. Database triggers block UPDATE and DELETE in the live realm. Balances can't go negative, and every post is idempotent. |
-| Redemption engine | 90-second quotes. Credits are reserved atomically, and each order has an idempotency key and is unique per quote. State transitions are guarded, failures reverse automatically, and uncertain outcomes are reconciled. Codes are encrypted at rest and revealed only to the owner. |
+| Redemption engine | Orders are created only after a $SHARK payment is confirmed. Each order has an idempotency key. State transitions are guarded, delivery failures mark a refund due, and uncertain outcomes are reconciled. Codes are encrypted at rest and revealed only to the owner. |
 | Webhooks and chain ingest | HMAC-SHA256 signatures over `t.body`, 300-second tolerance, and an event-ID replay table. Ingest only accepts finalized events, and duplicates are ignored. |
 | Apple Wallet web service | Device registration, unregistration, list of updated serials, latest pass, and log endpoints, with `ApplePass` token auth. Signing uses `passkit-generator` and the APNs push uses HTTP/2. |
-| Transparency | Fees (withheld, harvested, withdrawn), settlements, holder and operations split, credit obligations, operating costs and periods. Token inventory is reported separately from cash. |
+| Transparency | Fees (withheld, harvested, withdrawn), settlements, holder and operations split, SOL reward obligations, operating costs and periods. Token inventory is reported separately from cash. |
 | Card waitlist | The email is encrypted at rest and looked up by keyed hash. |
 
 ### Simulated (demo realm only)
@@ -103,7 +103,7 @@ Production fails closed. Live redemption returns 503 until a real fulfillment pr
 | --- | --- |
 | Holdings, fees, settlements | Seeded so the engine produces the fixture amounts. Labelled as "Product preview" or "Sample values" everywhere they appear. |
 | Catalog | A 6-tier × 3-platform × 3-region demo catalog. Costs are illustrative, and Megalodon on Xbox is out of stock. |
-| Fulfillment | The demo provider has four scenarios: instant, pending (delivers after about 8 seconds), fail (credits returned) and timeout (reconciled). Codes look like `DEMO-NOT-REDEEMABLE-XXXX-XXXX` and cannot be redeemed. |
+| Fulfillment | The demo provider has four scenarios: instant, pending (delivers after about 8 seconds), fail (refund due) and timeout (reconciled). Codes look like `DEMO-NOT-REDEEMABLE-XXXX-XXXX` and cannot be redeemed. |
 | Wallet pass | A faithful visual preview with front and back. No signed `.pkpass` is issued for demo sessions. |
 
 ### Not built (by design)
@@ -124,9 +124,9 @@ These need agreements, approvals or credentials that code can't supply:
 3. **PlayStation Partners access.** There's no public PSN OAuth. The adapter boundary is `playStationProvider` in `src/lib/server/auth/providers.ts`.
 4. **Apple Pass Type ID certificate** (Apple Developer Program), the WWDR intermediate certificate, and the official "Add to Apple Wallet" badge. Download the badge from Apple and place it at `public/brand/apple/add-to-apple-wallet.svg`. The badge is only shown when that file exists *and* signing is configured.
 5. **A Solana indexer.** It must push finalized balance, fee and settlement events to `POST /api/ingest/chain`, plus a watermark. A period only finalizes after the watermark passes its end.
-6. **A settlement process.** Someone has to swap the withdrawn fee tokens to stablecoin and record each settlement with its real costs. Only settled proceeds fund credits.
+6. **A settlement process.** Someone has to swap the withdrawn fee tokens for SOL (or settle into SOL) and record each settlement with its real costs. Only settled proceeds fund holder SOL rewards.
 7. **A card issuer** for "Pay with SHARKCARD", if that product is ever pursued.
-8. **Legal review** of the reward model, credit terms, the transfer-fee disclosure and the brand name (see below), done before launch in each region.
+8. **Legal review** of the reward model, SOL payout terms, the transfer-fee disclosure and the brand name (see below), done before launch in each region.
 
 ---
 
@@ -136,7 +136,7 @@ These need agreements, approvals or credentials that code can't supply:
 src/
   app/                    Next.js App Router pages and API route handlers
     api/auth/*            microsoft, xbox (link only), steam, google, x, email, demo, logout, recovery
-    api/redemptions       quote and confirm      api/orders/[id](/code)   status and owner-only code reveal
+    api/checkout/shark    quote and confirm      api/orders/[id](/code)   status and owner-only code reveal
     api/wallet            challenge, verify, unlink                        api/account   preferences, unlink, recovery codes
     api/passkit/v1/*      Apple Wallet web service                       api/pass      signed .pkpass (fails closed)
     api/webhooks/*        fulfillment callbacks                          api/ingest/chain   indexer push
@@ -147,9 +147,9 @@ tests/                    engine and end-to-end flow tests (in-memory DB)
 ```
 
 - **Realms.** Every row has a `realm` column: either `live` or `demo:<id>`. Demo sandboxes can't read or write live data, and live accounts never see demo catalog rows.
-- **All money logic runs on the server.** The browser only sends intent (an item ID, a quote ID, an idempotency key). Balances, prices, eligibility and provider status are always read from the database.
-- **Credits.** 1 credit = $0.01 of settled holder funding (`CREDIT_USD_MICROS`). Credits can't be transferred or exchanged for cash, and they are not GTA$.
-- **Allocation.** For each period: budget × (your time-weighted eligible balance ÷ total eligible), rounded down. Dust, shares of unlinked wallets, and budgets with zero eligible weight carry forward. Allocations stay pending for `PENDING_CLEARANCE_HOURS` before they become available.
+- **All money logic runs on the server.** The browser only sends intent (an item ID or a payment ID). Balances, prices, eligibility and provider status are always read from the database.
+- **Prices.** Each Shark Card has a fixed SOL price. Members pay the $SHARK equivalent at checkout (live Jupiter prices, plus the token transfer fee). The website never moves funds.
+- **Holder rewards.** A share of settled fee proceeds, in SOL. Allocations stay pending for `PENDING_CLEARANCE_HOURS`, then wait for the operator to send SOL and record the payout. There is no guaranteed yield.
 
 ---
 

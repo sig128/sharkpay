@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/app/Page";
 import { RedeemDialog, type RewardItem, type SharkAvailability } from "./RedeemDialog";
 import { callApi } from "@/lib/client";
-import { fmtGta, fmtInt, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
+import { fmtGta, fmtSol, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
 
 interface Props {
   items: RewardItem[];
@@ -105,7 +105,7 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
           {futureOnly ? "0 items" : `${filtered.length} item${filtered.length === 1 ? "" : "s"}`}
         </span>
         <span className="num">
-          <span className="text-muted">Available:</span> {fmtInt(available)} CR
+          <span className="text-muted">SOL rewards ready:</span> {fmtSol(available)}
         </span>
       </div>
 
@@ -127,7 +127,6 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((i) => {
             const oos = i.status !== "available" || i.stock === 0;
-            const enough = available >= i.creditCost;
             return (
               <li key={i.id} className="panel flex flex-col p-3">
                 <TierArt tier={i.tier} className="aspect-[2/1]" label={i.name.replace(" Card", "")} />
@@ -142,8 +141,8 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
                   <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                     <dt className="text-muted">In-game amount</dt>
                     <dd className="num text-right">{fmtGta(i.gtaAmount)}</dd>
-                    <dt className="text-muted">Credit cost</dt>
-                    <dd className="num text-right text-coral">{fmtInt(i.creditCost)} CR</dd>
+                    <dt className="text-muted">Price</dt>
+                    <dd className="num text-right text-coral">{fmtSol(i.solPriceLamports)}</dd>
                     <dt className="text-muted">Retail price</dt>
                     <dd className="text-right text-muted">{i.retailReference ?? "Set by provider"}</dd>
                     <dt className="text-muted">Platform</dt>
@@ -155,7 +154,7 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
                   </dl>
                   <div className="mt-auto flex flex-wrap gap-2 pt-5">
                     <Button className="flex-1" disabled={oos} onClick={() => setActive(i)}>
-                      {oos ? "Out of stock" : enough ? "Redeem" : "Review"}
+                      {oos ? "Out of stock" : "Buy"}
                     </Button>
                     <Button
                       variant="secondary"
@@ -173,7 +172,7 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
         </ul>
       )}
 
-      <RedeemDialog key={active?.id ?? "none"} item={active} available={available} demo={demo} userPlatform={defaults.platform} shark={shark} onClose={() => setActive(null)} />
+      <RedeemDialog key={active?.id ?? "none"} item={active} demo={demo} userPlatform={defaults.platform} shark={shark} onClose={() => setActive(null)} />
     </>
   );
 }

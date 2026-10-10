@@ -80,8 +80,8 @@ export function overview(session: Session, now = Date.now()) {
           seq: lastFinalized.seq,
           startsAt: lastFinalized.starts_at * 1000,
           endsAt: lastFinalized.ends_at * 1000,
-          budget: lastFinalized.budget_credits ?? 0,
-          myAllocation: allocations.find((a) => a.period_id === lastFinalized.id)?.credits ?? 0,
+          budget: lastFinalized.budget_lamports ?? 0,
+          myAllocation: allocations.find((a) => a.period_id === lastFinalized.id)?.lamports ?? 0,
           myStatus: allocations.find((a) => a.period_id === lastFinalized.id)?.status ?? null,
           availableAt: allocations.find((a) => a.period_id === lastFinalized.id)?.available_at ?? null,
         }
@@ -93,11 +93,11 @@ export function overview(session: Session, now = Date.now()) {
           itemId: selected.id,
           name: selected.name,
           gtaAmount: selected.gta_amount,
-          creditCost: selected.credit_cost,
+          solPriceLamports: selected.sol_price_lamports,
           platform: selected.platform,
           region: selected.region,
           isDemo: Boolean(selected.is_demo),
-          progress: Math.min(1, balances.available / selected.credit_cost),
+          progress: selected.sol_price_lamports > 0 ? Math.min(1, balances.payable / selected.sol_price_lamports) : 0,
         }
       : null,
     recent: activity(session).slice(0, 5),
@@ -110,9 +110,9 @@ export interface ActivityItem {
   title: string;
   explanation: string;
   createdAt: number;
-  availableDelta: number;
+  payableDelta: number;
   pendingDelta: number;
-  reservedDelta: number;
+  paidDelta: number;
   refType: string | null;
   refId: string | null;
   status: "completed" | "pending" | "reversed";
@@ -135,18 +135,17 @@ export function activity(session: Session): ActivityItem[] {
         title: "",
         explanation: "",
         createdAt: l.createdAt,
-        availableDelta: 0,
+        payableDelta: 0,
         pendingDelta: 0,
-        reservedDelta: 0,
+        paidDelta: 0,
         refType: l.refType,
         refId: l.refId,
         status: "completed",
       };
       byTxn.set(l.txnId, item);
     }
-    if (l.account.endsWith(":available")) item.availableDelta += l.amount;
+    if (l.account.endsWith(":payable")) item.payableDelta += l.amount;
     if (l.account.endsWith(":pending")) item.pendingDelta += l.amount;
-    if (l.account.endsWith(":reserved")) item.reservedDelta += l.amount;
   }
 
   for (const item of byTxn.values()) {
@@ -163,38 +162,24 @@ export function activity(session: Session): ActivityItem[] {
             Period: `#${a.seq}`,
             "Your time-weighted weight": a.weight,
             "Total eligible weight": a.total_weight,
-            "Funded period budget": `${a.budget_credits.toLocaleString("en-US")} credits`,
+            "Funded period budget": `${(a.budget_lamports / 1_000_000_000).toFixed(4)} SOL`,
             Formula: "budget × your weight ÷ total weight, rounded down",
             Wallet: maskAddress(a.wallet),
-            "Available from": a.available_at ? new Date(a.available_at).toISOString() : null,
+            "Payout after": a.available_at ? new Date(a.available_at).toISOString() : null,
           };
         }
         break;
       }
       case "clearance": {
         const a = item.refId ? allocById.get(item.refId) : undefined;
-        item.title = `Period ${a?.seq ?? ""} credits cleared`;
-        item.explanation = "The clearance window ended, so these credits moved from pending to available.";
+        item.title = `Period ${a?.seq ?? ""} SOL cleared`;
+        item.explanation = "The clearance window ended. This SOL is earned and waiting to be paid to your linked wallet.";
         break;
       }
-      case "reservation":
-        item.title = `Reserved for ${order?.item_name ?? "a reward"}`;
-        item.explanation = "Credits were held for your order so they can't be spent twice while the provider delivers it.";
-        item.status = order && ["reserved", "pending_delivery", "needs_reconciliation"].includes(order.status) ? "pending" : "completed";
-        break;
-      case "capture":
-        item.title = `Redeemed ${order?.item_name ?? "reward"}`;
-        item.explanation = "Delivery completed, so the reserved credits were spent.";
-        break;
-      case "release":
-        item.title = `Returned: ${order?.item_name ?? "order"}`;
-        item.explanation = "Delivery failed and the provider confirmed nothing was issued, so the reserved credits were returned.";
-        item.status = "reversed";
-        break;
-      case "reversal":
-        item.title = `Reversed: ${order?.item_name ?? "order"}`;
-        item.explanation = "The provider voided a delivered reward, so the credits were returned to your balance.";
-        item.status = "reversed";
+      case "payout":
+        item.title = "SOL reward paid";
+        item.explanation = "The operator sent this SOL to your linked wallet. The website never moves funds itself.";
+        item.paidDelta = -item.payableDelta;
         break;
       default:
         item.title = "Ledger entry";
@@ -208,12 +193,33 @@ export function activity(session: Session): ActivityItem[] {
         Platform: order.platform,
         Region: order.region,
         "Order status": order.status.replace(/_/g, " "),
-        "Credit cost": `${order.credit_cost.toLocaleString("en-US")} credits`,
+        Payment: "Paid in $SHARK",
       };
     }
   }
 
-  return [...byTxn.values()].sort((a, b) => b.createdAt - a.createdAt);
+  const rows = [...byTxn.values()];
+  for (const o of listOrders(session)) {
+    rows.push({
+      id: o.id,
+      kind: "payout",
+      title: o.status === "completed" ? `Bought ${o.item_name}` : `Order: ${o.item_name}`,
+      explanation: `Paid in ${"$SHARK"}. SOL rewards are not spent here.`,
+      createdAt: o.created_at,
+      payableDelta: 0,
+      pendingDelta: 0,
+      paidDelta: 0,
+      refType: "order",
+      refId: o.id,
+      status: o.status === "reversed" || o.status === "failed" ? "reversed" : o.status === "completed" ? "completed" : "pending",
+      detail: {
+        Order: o.id,
+        Reward: o.item_name,
+        "Order status": o.status.replace(/_/g, " "),
+      },
+    });
+  }
+  return rows.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export function transparency(realm: string) {
@@ -230,26 +236,24 @@ export function transparency(realm: string) {
     net: number | null;
     holder: number | null;
     ops: number | null;
-    credits: number | null;
     n: number;
     last: number | null;
   }>(
-    `SELECT SUM(CAST(tokens_sold_raw AS INTEGER)) AS sold, SUM(gross_usd_micros) AS gross, SUM(costs_usd_micros) AS costs,
-       SUM(net_usd_micros) AS net, SUM(holder_usd_micros) AS holder, SUM(ops_usd_micros) AS ops, SUM(credits_funded) AS credits,
+    `SELECT SUM(CAST(tokens_sold_raw AS INTEGER)) AS sold, SUM(gross_lamports) AS gross, SUM(costs_lamports) AS costs,
+       SUM(net_lamports) AS net, SUM(holder_lamports) AS holder, SUM(ops_lamports) AS ops,
        COUNT(*) AS n, MAX(settled_at) AS last FROM settlements WHERE realm = ?`,
     realm,
   )!;
   const soldRaw = BigInt(s.sold ?? 0);
   const totals = ledgerTotals(realm);
-  const buckets = one<{ pending: number | null; available: number | null; reserved: number | null }>(
+  const buckets = one<{ pending: number | null; payable: number | null }>(
     `SELECT SUM(CASE WHEN account LIKE '%:pending' THEN amount END) AS pending,
-            SUM(CASE WHEN account LIKE '%:available' THEN amount END) AS available,
-            SUM(CASE WHEN account LIKE '%:reserved' THEN amount END) AS reserved
+            SUM(CASE WHEN account LIKE '%:payable' THEN amount END) AS payable
      FROM ledger_entries WHERE realm = ? AND account LIKE 'user:%'`,
     realm,
   )!;
-  const redemptions = one<{ n: number; credits: number | null }>(
-    `SELECT COUNT(*) AS n, SUM(credit_cost) AS credits FROM orders WHERE realm = ? AND status = 'completed'`,
+  const redemptions = one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM orders WHERE realm = ? AND status = 'completed'`,
     realm,
   )!;
   const opCosts = all<{ label: string; usd_micros: number; incurred_at: number }>(
@@ -261,9 +265,9 @@ export function transparency(realm: string) {
     startsAt: p.starts_at * 1000,
     endsAt: p.ends_at * 1000,
     status: p.status,
-    budget: p.budget_credits,
-    allocated: p.allocated_credits,
-    carried: p.carried_credits,
+    budget: p.budget_lamports,
+    allocated: p.allocated_lamports,
+    carried: p.carried_lamports,
     eligibleWallets: p.eligible_wallets,
     finalizedAt: p.finalized_at,
   }));
@@ -276,7 +280,6 @@ export function transparency(realm: string) {
     config: {
       feeBps: e.REWARD_FEE_BPS,
       holderShareBps: e.HOLDER_SHARE_BPS,
-      usdMicrosPerCredit: e.CREDIT_USD_MICROS,
       clearanceHours: e.PENDING_CLEARANCE_HOURS,
       periodDays: e.PERIOD_LENGTH_DAYS,
       minEligibleTokens: e.MIN_ELIGIBLE_BALANCE,
@@ -292,24 +295,23 @@ export function transparency(realm: string) {
     },
     settlement: {
       count: s.n,
-      grossUsd: (s.gross ?? 0) / 1e6,
-      costsUsd: (s.costs ?? 0) / 1e6,
-      netUsd: (s.net ?? 0) / 1e6,
-      holderUsd: (s.holder ?? 0) / 1e6,
-      opsUsd: (s.ops ?? 0) / 1e6,
+      grossLamports: s.gross ?? 0,
+      costsLamports: s.costs ?? 0,
+      netLamports: s.net ?? 0,
+      holderLamports: s.holder ?? 0,
+      opsLamports: s.ops ?? 0,
     },
-    credits: {
+    rewards: {
       funded: totals.funded,
       unallocated: totals.pool,
       outstanding: totals.outstanding,
       pending: buckets.pending ?? 0,
-      available: buckets.available ?? 0,
-      reserved: buckets.reserved ?? 0,
-      redeemed: totals.redeemed,
+      payable: buckets.payable ?? 0,
+      paid: totals.paid,
       allocated: periods.reduce((acc, p) => acc + (p.allocated ?? 0), 0),
       backed: totals.backed,
     },
-    redemptions: { count: redemptions.n, credits: redemptions.credits ?? 0 },
+    redemptions: { count: redemptions.n },
     operatingCosts: opCosts.map((c) => ({ label: c.label, usd: c.usd_micros / 1e6, at: c.incurred_at })),
     periods,
     exclusions: listExclusions(realm).map((x) => ({ ...x, address: maskAddress(x.address) })),

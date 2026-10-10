@@ -15,7 +15,7 @@ interface Props {
 
 const beats = [
   { title: "Your card, on the web", body: "The full-colour membership card lives on the site and in the app." },
-  { title: "Resolved into a Wallet pass", body: "Apple Wallet shows a clean, flat pass with your credits, pending balance and membership reference." },
+  { title: "Resolved into a Wallet pass", body: "Apple Wallet shows a clean, flat pass with your $SHARK holdings, SOL rewards and membership reference." },
   { title: "A view, not a wallet of money", body: "The pass can't pay or redeem. Redemption always happens in the signed-in app." },
 ];
 
@@ -53,7 +53,7 @@ export function WalletSection(props: Props) {
       </ol>
       <div className="mt-8 rounded-2xl border border-line bg-white/[0.03] p-5 text-sm text-muted">
         <strong className="text-warm">Wallet pass ≠ Apple Pay.</strong> A rewards pass displays membership info. It does
-        not turn reward credits or GTA$ into spendable money. A future payment card would need a regulated issuing
+        not turn SOL rewards or GTA$ into spendable money. A future payment card would need a regulated issuing
         partner and is shown in the app as planned, not live.
       </div>
       <div className="mt-5">

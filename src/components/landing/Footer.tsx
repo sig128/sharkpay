@@ -26,7 +26,7 @@ const columns: { title: string; links: FooterLink[] }[] = [
     links: [
       { href: "/login", label: "Sign in" },
       { href: "/app", label: "Dashboard" },
-      { href: "/app/rewards", label: "Redeem credits" },
+      { href: "/app/rewards", label: "Buy a Shark Card" },
       { href: "/app/activity", label: "Activity" },
     ],
   },
@@ -117,7 +117,7 @@ export function Footer() {
                 <span className="text-sunset-flow-soft">starts here.</span>
               </p>
               <p className="mt-4 max-w-md text-muted">
-                Link a wallet, collect funded credits and redeem them for GTA Online Shark Cards on your platform.
+                Link a wallet, collect funded SOL rewards and pay {brand.ticker} for GTA Online Shark Cards on your platform.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -215,7 +215,7 @@ export function Footer() {
         <div className="container-site grid grid-cols-1 gap-6 py-10 text-xs leading-relaxed text-muted md:grid-cols-12">
           <div className="space-y-3 md:col-span-8">
             <p className="text-sm font-medium text-warm/90">{brand.legal.independence}</p>
-            <p>{brand.legal.credits}</p>
+            <p>{brand.legal.rewards}</p>
             <p>{brand.legal.trademarks}</p>
             <p>Figures marked as sample or product preview are illustrative and are not live data.</p>
           </div>

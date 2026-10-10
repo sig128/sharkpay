@@ -62,6 +62,8 @@ services:
         generateValue: true
       - key: CHAIN_INGEST_SECRET
         generateValue: true
+      - key: PAYOUT_RECORDER_SECRET
+        generateValue: true
 
       # Sign-in providers
       - key: GOOGLE_CLIENT_ID

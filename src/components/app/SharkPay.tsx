@@ -9,9 +9,9 @@ import { ApiError, callApi } from "@/lib/client";
 import { brand } from "@/config/brand";
 import type { OrderView } from "@/lib/server/orders/orders";
 import type { SharkPaymentView } from "@/lib/server/payments/shark";
+import { fmtSol } from "@/lib/format";
 
 const POLL_MS = 5_000;
-const usd = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 /** Pay-with-$SHARK flow: server quote, Solana Pay request, on-chain confirmation, then the order. */
 export function SharkPay({ itemId, onBack, onOrder }: { itemId: string; onBack: () => void; onOrder: () => void }) {
@@ -116,7 +116,7 @@ export function SharkPay({ itemId, onBack, onOrder }: { itemId: string; onBack: 
       <div className="rounded-2xl border border-line bg-midnight/40 p-5">
         <div className="grid grid-cols-[1fr_auto] items-baseline gap-y-2 text-sm">
           <span className="text-muted">Card price</span>
-          <span className="num text-right">{usd(payment.usdCents)}</span>
+          <span className="num text-right">{fmtSol(payment.solPriceLamports)}</span>
           <span className="text-muted">{brand.ticker} price</span>
           <span className="num text-right">${payment.tokenUsdPrice.toPrecision(4)}</span>
           <span className="border-t border-line pt-2 font-semibold">You pay</span>

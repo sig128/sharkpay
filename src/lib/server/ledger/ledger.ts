@@ -3,35 +3,27 @@ import { randomId } from "../crypto";
 import { AppError } from "../errors";
 
 /**
- * Append-only, double-entry credit ledger. Every transaction sums to zero.
- * Balances are always derived from entries; nothing is stored as a mutable
- * balance. SQLite triggers reject UPDATE/DELETE on live ledger rows.
+ * Append-only, double-entry ledger of holder SOL rewards, in lamports. Every
+ * transaction sums to zero. Balances are always derived from entries; nothing
+ * is stored as a mutable balance. SQLite triggers reject UPDATE/DELETE on live
+ * ledger rows. The ledger records SOL; it never moves it.
  *
  * Accounts
- *   external:settlement      source of funding (settled holder-reward proceeds)
+ *   external:settlement      SOL from settled fee proceeds (source of funding)
  *   pool:holder_rewards      funded but not yet allocated (carry-forward lives here)
  *   user:<id>:pending        allocated, waiting for the clearance window
- *   user:<id>:available      spendable on rewards
- *   user:<id>:reserved       held for an in-flight order
- *   redeemed                 obligations discharged by completed fulfilment
+ *   user:<id>:payable        earned and cleared, waiting for the operator payout
+ *   external:paid_out        SOL the operator has sent, verified on-chain
  */
 export const acct = {
   settlement: "external:settlement",
   pool: "pool:holder_rewards",
-  redeemed: "redeemed",
+  paidOut: "external:paid_out",
   pending: (userId: string) => `user:${userId}:pending`,
-  available: (userId: string) => `user:${userId}:available`,
-  reserved: (userId: string) => `user:${userId}:reserved`,
+  payable: (userId: string) => `user:${userId}:payable`,
 };
 
-export type LedgerKind =
-  | "funding"
-  | "allocation"
-  | "clearance"
-  | "reservation"
-  | "capture"
-  | "release"
-  | "reversal";
+export type LedgerKind = "funding" | "allocation" | "clearance" | "payout";
 
 export interface PostInput {
   kind: LedgerKind;
@@ -106,11 +98,14 @@ export function balance(realm: string, account: string): number {
   );
 }
 
+/** A member's SOL rewards in lamports. `paid` is what the operator has already sent. */
 export function userBalances(realm: string, userId: string) {
+  const paid =
+    one<{ p: number | null }>(`SELECT SUM(lamports) AS p FROM payouts WHERE realm = ? AND user_id = ?`, realm, userId)?.p ?? 0;
   return {
-    available: balance(realm, acct.available(userId)),
     pending: balance(realm, acct.pending(userId)),
-    reserved: balance(realm, acct.reserved(userId)),
+    payable: balance(realm, acct.payable(userId)),
+    paid,
   };
 }
 
@@ -121,16 +116,21 @@ export function ledgerTotals(realm: string) {
     realm,
   );
   let outstanding = 0;
+  let pending = 0;
+  let payable = 0;
   let pool = 0;
-  let redeemed = 0;
+  let paid = 0;
   let funded = 0;
   for (const r of rows) {
-    if (r.account.startsWith("user:")) outstanding += r.b;
-    else if (r.account === acct.pool) pool = r.b;
-    else if (r.account === acct.redeemed) redeemed = r.b;
+    if (r.account.startsWith("user:")) {
+      outstanding += r.b;
+      if (r.account.endsWith(":pending")) pending += r.b;
+      if (r.account.endsWith(":payable")) payable += r.b;
+    } else if (r.account === acct.pool) pool = r.b;
+    else if (r.account === acct.paidOut) paid = r.b;
     else if (r.account === acct.settlement) funded = -r.b;
   }
-  return { funded, pool, outstanding, redeemed, backed: funded - redeemed >= outstanding + pool };
+  return { funded, pool, outstanding, pending, payable, paid, backed: funded - paid >= outstanding + pool };
 }
 
 export interface LedgerLine {

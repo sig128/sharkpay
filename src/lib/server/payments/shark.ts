@@ -9,10 +9,18 @@ import { providerFor } from "../fulfillment/provider";
 import { transferFee } from "../rewards/engine";
 import { validAddress, validMint } from "../services/buy";
 import { formatUnits } from "./units";
-
-export { formatUnits };
+import { LAMPORTS_PER_SOL } from "@/lib/format";
+import { getFinalizedTransaction, solanaRpc, type Rpc } from "../chain/rpc";
 import { availableItem, orderEvent, submitOrder, type OrderRow } from "../orders/orders";
 import type { Session } from "../auth/sessions";
+
+export { formatUnits, solanaRpc };
+
+const SOL_MINT = "So11111111111111111111111111111111111111112";
+const DEMO_MINT = "7nE9GvcwsqzYxmJLSrYmSB1V1YoJWVK1KWzAcWAzjXkN";
+const DEMO_TREASURY = "5f1oiop1b3Bxw8ppwbAECAVXq118mHGCVLEsp4EFPSxb";
+const DEMO_SOL_USD = 150;
+const DEMO_TOKEN_USD = 0.0042;
 
 /** Payments that arrive this long after the quote expired are still honoured. */
 const LATE_GRACE_MS = 60_000;
@@ -25,7 +33,8 @@ export interface SharkPaymentRow {
   realm: string;
   user_id: string;
   item_id: string;
-  usd_cents: number;
+  sol_price_lamports: number;
+  sol_usd_price: number;
   token_usd_price: number;
   amount_net: string;
   amount_gross: string;
@@ -37,6 +46,7 @@ export interface SharkPaymentRow {
   payer: string | null;
   received: string | null;
   order_id: string | null;
+  demo_scenario: string | null;
   note: string | null;
   created_at: number;
   expires_at: number;
@@ -50,10 +60,10 @@ export type CheckoutAvailability =
 
 /** Whether $SHARK checkout can take a payment right now. Fails closed on every missing piece. */
 export function sharkCheckout(realm: string): CheckoutAvailability {
-  const e = env();
   if (realm.startsWith("demo:")) {
-    return { enabled: false, code: "live_only", reason: "Paying with $SHARK needs a signed-in account, not the demo." };
+    return { enabled: true, mint: DEMO_MINT, treasury: DEMO_TREASURY };
   }
+  const e = env();
   const mint = validMint(e.TOKEN_MINT);
   if (!mint) return { enabled: false, code: "not_live", reason: "$SHARK isn't live yet." };
   const treasury = validAddress(e.SHARK_TREASURY_WALLET);
@@ -70,47 +80,73 @@ export function sharkCheckout(realm: string): CheckoutAvailability {
 
 // ---- Price ---------------------------------------------------------------------
 
-let priceCache: { mint: string; at: number; usd: number } | null = null;
+export interface MarketPrices {
+  solUsd: number;
+  tokenUsd: number;
+}
+
+let priceCache: { mint: string; at: number; prices: MarketPrices } | null = null;
 
 export function resetPriceCacheForTests() {
   priceCache = null;
 }
 
-/** Server-side USD price for the token from the configured price API (Jupiter by default). */
-export async function sharkUsdPrice(mint: string, fetchImpl: typeof fetch = fetch, now = Date.now()): Promise<number> {
-  if (priceCache && priceCache.mint === mint && now - priceCache.at < PRICE_CACHE_MS) return priceCache.usd;
+function readPrice(body: unknown, mint: string, needLiquidity: boolean) {
+  const entry = (body as Record<string, { usdPrice?: unknown; liquidity?: unknown } | null>)?.[mint];
+  const usd = Number(entry?.usdPrice);
+  const liquidity = Number(entry?.liquidity);
+  if (!Number.isFinite(usd) || usd <= 0) return null;
+  if (needLiquidity && (!Number.isFinite(liquidity) || liquidity < env().SHARK_MIN_LIQUIDITY_USD)) return null;
+  return usd;
+}
+
+/** SOL and $SHARK USD prices from Jupiter. Demo uses fixed sample prices. */
+export async function marketPrices(mint: string, fetchImpl: typeof fetch = fetch, now = Date.now()): Promise<MarketPrices> {
+  if (mint === DEMO_MINT) return { solUsd: DEMO_SOL_USD, tokenUsd: DEMO_TOKEN_USD };
+  if (priceCache && priceCache.mint === mint && now - priceCache.at < PRICE_CACHE_MS) return priceCache.prices;
   const e = env();
   let body: unknown;
   try {
-    const res = await fetchImpl(`${e.SHARK_PRICE_URL}?ids=${encodeURIComponent(mint)}`, {
+    const res = await fetchImpl(`${e.SHARK_PRICE_URL}?ids=${encodeURIComponent(`${SOL_MINT},${mint}`)}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) throw new Error(`price ${res.status}`);
     body = await res.json();
   } catch {
-    throw new AppError("price_unavailable", "We couldn't get a reliable $SHARK price. Try again in a moment.", 503);
+    throw new AppError("price_unavailable", "We couldn't get a reliable market price. Try again in a moment.", 503);
   }
-  const entry = (body as Record<string, { usdPrice?: unknown; liquidity?: unknown } | null>)?.[mint];
-  const usd = Number(entry?.usdPrice);
-  const liquidity = Number(entry?.liquidity);
-  if (!Number.isFinite(usd) || usd <= 0) {
-    throw new AppError("price_unavailable", "There's no market price for $SHARK yet.", 503);
+  const solUsd = readPrice(body, SOL_MINT, false);
+  const tokenUsd = readPrice(body, mint, true);
+  if (!solUsd) throw new AppError("price_unavailable", "We couldn't get a reliable SOL price.", 503);
+  if (!tokenUsd) {
+    throw new AppError("price_unavailable", "There's no market price for $SHARK yet, or liquidity is too low.", 503);
   }
-  if (!Number.isFinite(liquidity) || liquidity < e.SHARK_MIN_LIQUIDITY_USD) {
-    throw new AppError("price_unavailable", "$SHARK liquidity is too low to price a payment safely right now.", 503);
-  }
-  priceCache = { mint, at: now, usd };
-  return usd;
+  const prices = { solUsd, tokenUsd };
+  priceCache = { mint, at: now, prices };
+  return prices;
+}
+
+export async function sharkUsdPrice(mint: string, fetchImpl: typeof fetch = fetch, now = Date.now()) {
+  return (await marketPrices(mint, fetchImpl, now)).tokenUsd;
 }
 
 // ---- Amounts -------------------------------------------------------------------
 
-/** Atomic token units worth `usdCents` at `usdPrice`, rounded up so the price is always covered. */
-export function tokensForUsd(usdCents: number, usdPrice: number, decimals: number): bigint {
-  const atomic = Math.ceil((usdCents / 100 / usdPrice) * 10 ** decimals);
-  if (!Number.isSafeInteger(atomic) || atomic <= 0) throw new AppError("price_unavailable", "This amount can't be priced safely.", 503);
-  return BigInt(atomic);
+const PRICE_SCALE = 100_000_000n;
+
+/** Atomic $SHARK units that cover a fixed SOL price at the given USD prices, rounded up. */
+export function tokensForSol(lamports: number, solUsd: number, tokenUsd: number, decimals: number): bigint {
+  const sol = BigInt(Math.round(solUsd * Number(PRICE_SCALE)));
+  const tok = BigInt(Math.round(tokenUsd * Number(PRICE_SCALE)));
+  if (sol <= 0n || tok <= 0n || lamports <= 0 || decimals < 0 || decimals > 18) {
+    throw new AppError("price_unavailable", "This amount can't be priced safely.", 503);
+  }
+  const num = BigInt(lamports) * sol * 10n ** BigInt(decimals);
+  const den = BigInt(LAMPORTS_PER_SOL) * tok;
+  const atomic = (num + den - 1n) / den;
+  if (atomic <= 0n) throw new AppError("price_unavailable", "This amount can't be priced safely.", 503);
+  return atomic;
 }
 
 /** Smallest send amount whose net after the Token-2022 transfer fee is at least `net`. */
@@ -128,26 +164,27 @@ export async function createSharkQuote(session: Session, itemId: string, fetchIm
   const status = sharkCheckout(session.realm);
   if (!status.enabled) throw new AppError(status.code, status.reason, 503);
   const item = availableItem(session.realm, itemId);
-  if (!item.usd_price_cents || item.usd_price_cents <= 0) {
-    throw new AppError("price_unavailable", "This card doesn't have a provider price yet.", 503);
+  if (!item.sol_price_lamports || item.sol_price_lamports <= 0) {
+    throw new AppError("price_unavailable", "This card doesn't have a SOL price yet.", 503);
   }
   const e = env();
-  const usd = await sharkUsdPrice(status.mint, fetchImpl, now);
-  const net = tokensForUsd(item.usd_price_cents, usd, e.TOKEN_DECIMALS);
+  const market = await marketPrices(status.mint, fetchImpl, now);
+  const net = tokensForSol(item.sol_price_lamports, market.solUsd, market.tokenUsd, e.TOKEN_DECIMALS);
   const gross = grossForNet(net, e.REWARD_FEE_BPS);
   const reference = bs58.encode(randomBytes(32));
   const id = randomId("spay");
   const expiresAt = now + e.SHARK_QUOTE_TTL_SECONDS * 1000;
   run(
-    `INSERT INTO shark_payments (id, realm, user_id, item_id, usd_cents, token_usd_price, amount_net, amount_gross, mint,
+    `INSERT INTO shark_payments (id, realm, user_id, item_id, sol_price_lamports, sol_usd_price, token_usd_price, amount_net, amount_gross, mint,
       recipient, reference, status, created_at, expires_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_payment', ?, ?, ?)`,
     id,
     session.realm,
     session.userId,
     item.id,
-    item.usd_price_cents,
-    usd,
+    item.sol_price_lamports,
+    market.solUsd,
+    market.tokenUsd,
     net.toString(),
     gross.toString(),
     status.mint,
@@ -176,7 +213,8 @@ export function paymentView(p: SharkPaymentRow) {
     status: p.status,
     itemId: p.item_id,
     itemName: item?.name ?? "Shark Card",
-    usdCents: p.usd_cents,
+    solPriceLamports: p.sol_price_lamports,
+    solUsdPrice: p.sol_usd_price,
     tokenUsdPrice: p.token_usd_price,
     amount,
     recipient: p.recipient,
@@ -205,28 +243,6 @@ export function getSharkPayment(session: Session, paymentId: string): SharkPayme
 }
 
 // ---- On-chain verification -------------------------------------------------------
-
-type Rpc = (method: string, params: unknown[]) => Promise<unknown>;
-
-export function solanaRpc(fetchImpl: typeof fetch = fetch): Rpc {
-  return async (method, params) => {
-    let body: { result?: unknown; error?: unknown };
-    try {
-      const res = await fetchImpl(env().SOLANA_RPC_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(8_000),
-      });
-      body = await res.json();
-    } catch {
-      throw new AppError("chain_unavailable", "We couldn't reach Solana. Your payment is safe; check again shortly.", 503);
-    }
-    if (body.error) throw new AppError("chain_unavailable", "Solana returned an error. Check again shortly.", 503);
-    return body.result;
-  };
-}
 
 interface TokenBalance {
   accountIndex: number;
@@ -296,10 +312,7 @@ export async function checkSharkPayment(session: Session, paymentId: string, rpc
 
   for (const s of [...sigs].reverse()) {
     if (s.err) continue;
-    const t = (await rpc("getTransaction", [
-      s.signature,
-      { commitment: "finalized", encoding: "jsonParsed", maxSupportedTransactionVersion: 0 },
-    ])) as ParsedTx | null;
+    const t = (await getFinalizedTransaction(rpc, s.signature)) as ParsedTx | null;
     const match = inspectPayment(t, p);
     if (!match) continue;
     const settled = settle(p, s.signature, match, now);
@@ -317,8 +330,50 @@ export async function checkSharkPayment(session: Session, paymentId: string, rpc
   if (p.status === "paid" && p.order_id) {
     const order = one<OrderRow>(`SELECT * FROM orders WHERE id = ?`, p.order_id)!;
     if (order.status === "reserved") await submitOrder(order, now);
+    p = getSharkPayment(session, paymentId);
   }
   return { payment: paymentView(p), order: orderFor(p) };
+}
+
+/** Demo-only: pretends the quoted $SHARK arrived so the catalog flow can be tried. */
+export async function simulateDemoPayment(
+  session: Session,
+  paymentId: string,
+  demoScenario: "instant" | "pending" | "fail" | "uncertain" | undefined,
+  now = Date.now(),
+) {
+  if (!session.realm.startsWith("demo:")) {
+    throw new AppError("forbidden", "Simulated payments are only available in the demo.", 403);
+  }
+  let p = getSharkPayment(session, paymentId);
+  if (p.status !== "awaiting_payment" && p.status !== "expired") return { payment: paymentView(p), order: orderFor(p) };
+  if (demoScenario) {
+    run(`UPDATE shark_payments SET demo_scenario = ?, updated_at = ? WHERE id = ?`, demoScenario, now, p.id);
+    p = getSharkPayment(session, paymentId);
+  }
+  const settled = settle(
+    p,
+    bs58.encode(randomBytes(64)),
+    { received: BigInt(p.amount_net), payer: "demo-payer", blockTimeMs: now },
+    now,
+  );
+  p = settled ?? getSharkPayment(session, paymentId);
+  if (p.status === "paid" && p.order_id) {
+    const order = one<OrderRow>(`SELECT * FROM orders WHERE id = ?`, p.order_id)!;
+    if (order.status === "reserved") await submitOrder(order, now);
+    p = getSharkPayment(session, paymentId);
+  }
+  return { payment: paymentView(p), order: orderFor(p) };
+}
+
+export async function estimateSharkAmount(lamports: number, mint: string | null, fetchImpl: typeof fetch = fetch) {
+  if (!mint || lamports <= 0) return null;
+  try {
+    const market = await marketPrices(mint, fetchImpl);
+    return formatUnits(tokensForSol(lamports, market.solUsd, market.tokenUsd, env().TOKEN_DECIMALS), env().TOKEN_DECIMALS);
+  } catch {
+    return null;
+  }
 }
 
 function orderFor(p: SharkPaymentRow): OrderRow | null {
@@ -373,17 +428,17 @@ function settle(
 
     const orderId = randomId("ord");
     run(
-      `INSERT INTO orders (id, realm, user_id, item_id, quote_id, idempotency_key, credit_cost, status, provider,
-        provider_idempotency_key, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, 'reserved', ?, ?, ?, ?)`,
+      `INSERT INTO orders (id, realm, user_id, item_id, payment_id, status, provider,
+        provider_idempotency_key, demo_scenario, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)`,
       orderId,
       p.realm,
       p.user_id,
       item.id,
       p.id,
-      p.id,
       provider.id,
       `pik_${orderId}`,
+      p.demo_scenario,
       now,
       now,
     );

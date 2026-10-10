@@ -8,8 +8,8 @@ import { normalizeEmail } from "../auth/email";
  * Apple Pay, plus issuer provisioning integration. None exists in this build.
  *
  * A card balance would be its own ledger, funded in fiat by the issuer
- * program, and kept separate from reward credits and GTA$. Nothing here
- * provisions a card, moves money or converts credits.
+ * program, and kept separate from SOL rewards, token holdings and GTA$. Nothing here
+ * provisions a card or moves money.
  */
 export interface CardIssuerProvider {
   readonly id: string;

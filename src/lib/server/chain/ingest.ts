@@ -3,7 +3,7 @@ import { all, one, run, tx } from "../db";
 import { randomId } from "../crypto";
 import { env } from "../env";
 import { acct, post } from "../ledger/ledger";
-import { creditsBacked, holderShare } from "../rewards/engine";
+import { holderShare } from "../rewards/engine";
 
 /**
  * Ingestion boundary for verified chain data. An indexer you operate (reading
@@ -40,12 +40,13 @@ export const feeEvent = z.object({
   commitment: finalized,
 });
 
+/** Collected fee tokens sold for SOL. Amounts are lamports actually received and paid. */
 export const settlementEvent = z.object({
   type: z.literal("settlement"),
   tokensSoldRaw: raw,
-  grossUsdMicros: z.number().int().nonnegative(),
+  grossLamports: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   /** Venue fees, network fees, slippage and other deductions actually paid. */
-  costsUsdMicros: z.number().int().nonnegative(),
+  costsLamports: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   venue: z.string().min(1).max(64),
   signature: z.string().min(16).max(128),
   settledAt: z.number().int().positive(),
@@ -115,41 +116,35 @@ export function ingest(realm: string, batch: IngestBatch, now = Date.now()) {
 }
 
 /**
- * Records settled proceeds and funds the holder pool. Credits are only ever
- * created here, from actual net proceeds; never from volume or unsold fees.
+ * Records SOL proceeds from selling collected fees and funds the holder pool
+ * with the holder share. Rewards are only ever funded here, from SOL actually
+ * received; never from volume or unsold fees.
  */
 export function recordSettlement(realm: string, s: z.infer<typeof settlementEvent>, now = Date.now()) {
   return tx(() => {
     if (one(`SELECT 1 FROM settlements WHERE realm = ? AND signature = ?`, realm, s.signature)) return false;
     const e = env();
-    const net = Math.max(0, s.grossUsdMicros - s.costsUsdMicros);
+    const net = Math.max(0, s.grossLamports - s.costsLamports);
     const split = holderShare(net, e.HOLDER_SHARE_BPS);
-    const prior = one<{ holder: number | null; credits: number | null }>(
-      `SELECT SUM(holder_usd_micros) AS holder, SUM(credits_funded) AS credits FROM settlements WHERE realm = ?`,
-      realm,
-    );
-    const credits =
-      creditsBacked((prior?.holder ?? 0) + split.holder, e.CREDIT_USD_MICROS) - (prior?.credits ?? 0);
     const id = randomId("stl");
     run(
-      `INSERT INTO settlements (id, realm, tokens_sold_raw, gross_usd_micros, costs_usd_micros, net_usd_micros,
-        holder_share_bps, holder_usd_micros, ops_usd_micros, credits_funded, venue, signature, settled_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO settlements (id, realm, tokens_sold_raw, gross_lamports, costs_lamports, net_lamports,
+        holder_share_bps, holder_lamports, ops_lamports, venue, signature, settled_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       realm,
       s.tokensSoldRaw,
-      s.grossUsdMicros,
-      s.costsUsdMicros,
+      s.grossLamports,
+      s.costsLamports,
       net,
       e.HOLDER_SHARE_BPS,
       split.holder,
       split.operations,
-      credits,
       s.venue,
       s.signature,
       s.settledAt,
     );
-    if (credits > 0) {
+    if (split.holder > 0) {
       post(
         realm,
         {
@@ -157,10 +152,10 @@ export function recordSettlement(realm: string, s: z.infer<typeof settlementEven
           idempotencyKey: `funding:${id}`,
           refType: "settlement",
           refId: id,
-          memo: "Settled fee proceeds funded the holder reward pool",
+          memo: "SOL from settled fees funded the holder reward pool",
           entries: [
-            { account: acct.settlement, amount: -credits },
-            { account: acct.pool, amount: credits },
+            { account: acct.settlement, amount: -split.holder },
+            { account: acct.pool, amount: split.holder },
           ],
         },
         now,

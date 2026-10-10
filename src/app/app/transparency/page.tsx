@@ -4,7 +4,7 @@ import { requirePageSession } from "@/lib/server/guard";
 import { transparency } from "@/lib/server/services/dashboard";
 import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { Badge, PreviewBadge } from "@/components/ui/Badges";
-import { fmtDate, fmtDateTime, fmtInt, fmtTokens, fmtUsd } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtInt, fmtSol, fmtTokens, fmtUsd } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Transparency" };
 
@@ -14,14 +14,14 @@ export default async function TransparencyPage() {
   const ops = t.operatingCosts.reduce((s, c) => s + c.usd, 0);
   const tok = (n: number) => <span className="num whitespace-nowrap">{fmtTokens(n, brand.ticker)}</span>;
   const usd = (n: number) => <span className="num">{fmtUsd(n)}</span>;
-  const cr = (n: number) => <span className="num">{fmtInt(n)} CR</span>;
+  const sol = (n: number) => <span className="num">{fmtSol(n)}</span>;
   const hasData = t.settlement.count > 0 || t.periods.length > 0;
 
   return (
     <>
       <PageHeader
         eyebrow="Transparency"
-        title="Where credits come from"
+        title="Where rewards come from"
         actions={t.isSample ? <PreviewBadge label="Sample values" /> : t.lastUpdated ? <Badge tone="mint">Live · updated {fmtDateTime(t.lastUpdated)}</Badge> : <Badge>No live data yet</Badge>}
       >
         Fees are collected in tokens, sold for settlement assets, and only then fund rewards. Token inventory is shown
@@ -53,38 +53,38 @@ export default async function TransparencyPage() {
           <KV
             items={[
               ["Settlements", <span key="n" className="num">{t.settlement.count}</span>],
-              ["Gross proceeds", usd(t.settlement.grossUsd)],
-              ["Swap, network and venue costs", <span key="c" className="num">−{fmtUsd(t.settlement.costsUsd)}</span>],
-              [<strong key="n2" className="text-warm">Net settled proceeds</strong>, usd(t.settlement.netUsd)],
-              [`Holder reward pool (${t.config.holderShareBps / 100}%)`, usd(t.settlement.holderUsd)],
-              [`Operations & reserves (${100 - t.config.holderShareBps / 100}%)`, usd(t.settlement.opsUsd)],
+              ["Gross proceeds", sol(t.settlement.grossLamports)],
+              ["Swap, network and venue costs", <span key="c" className="num">−{fmtSol(t.settlement.costsLamports)}</span>],
+              [<strong key="n2" className="text-warm">Net settled proceeds</strong>, sol(t.settlement.netLamports)],
+              [`Holder reward pool (${t.config.holderShareBps / 100}%)`, sol(t.settlement.holderLamports)],
+              [`Operations & reserves (${100 - t.config.holderShareBps / 100}%)`, sol(t.settlement.opsLamports)],
             ]}
           />
           {t.lastSettlement && <p className="mt-3 font-mono text-xs text-muted">Last settlement {fmtDateTime(t.lastSettlement)}</p>}
         </Panel>
 
-        <Panel title="Credit obligations" className="lg:col-span-6">
+        <Panel title="SOL reward obligations" className="lg:col-span-6">
           <KV
             items={[
-              [`Credits funded (${fmtUsd(t.config.usdMicrosPerCredit / 1e6)} each)`, cr(t.credits.funded)],
-              ["Allocated to members", cr(t.credits.allocated)],
-              ["Funding available (unallocated, carried forward)", cr(t.credits.unallocated)],
-              [<strong key="o" className="text-warm">Outstanding obligations</strong>, cr(t.credits.outstanding)],
-              ["· pending", cr(t.credits.pending)],
-              ["· available", cr(t.credits.available)],
-              ["· reserved for orders", cr(t.credits.reserved)],
-              ["Completed redemptions", <span key="r" className="num">{t.redemptions.count} · {fmtInt(t.credits.redeemed)} CR</span>],
+              ["SOL funded from settled fees", sol(t.rewards.funded)],
+              ["Allocated to members", sol(t.rewards.allocated)],
+              ["Unallocated (carried forward)", sol(t.rewards.unallocated)],
+              [<strong key="o" className="text-warm">Outstanding</strong>, sol(t.rewards.outstanding)],
+              ["· pending", sol(t.rewards.pending)],
+              ["· ready to pay out", sol(t.rewards.payable)],
+              ["· already paid", sol(t.rewards.paid)],
+              ["Completed card orders", <span key="r" className="num">{t.redemptions.count}</span>],
             ]}
           />
           <div className="mt-4 flex items-center gap-2 text-sm">
-            {t.credits.backed ? <Badge tone="mint">Fully backed</Badge> : <Badge tone="danger">Backing check failed</Badge>}
-            <span className="text-muted">Outstanding + unallocated ≤ funded − redeemed</span>
+            {t.rewards.backed ? <Badge tone="mint">Fully backed</Badge> : <Badge tone="danger">Backing check failed</Badge>}
+            <span className="text-muted">Outstanding + unallocated ≤ funded − paid</span>
           </div>
         </Panel>
 
         <Panel title="Operating costs" className="lg:col-span-6">
           {t.operatingCosts.length ? (
-            <KV items={[...t.operatingCosts.map((c) => [<span key={c.label}>{c.label} <span className="font-mono text-xs">· {fmtDate(c.at)}</span></span>, usd(c.usd)] as [React.ReactNode, React.ReactNode]), [<strong key="tot" className="text-warm">Operations share remaining</strong>, usd(t.settlement.opsUsd - ops)]]} />
+            <KV items={[...t.operatingCosts.map((c) => [<span key={c.label}>{c.label} <span className="font-mono text-xs">· {fmtDate(c.at)}</span></span>, usd(c.usd)] as [React.ReactNode, React.ReactNode]), [<strong key="tot" className="text-warm">Recorded operating costs</strong>, usd(ops)]]} />
           ) : (
             <p className="text-sm text-muted">No operating costs recorded.</p>
           )}

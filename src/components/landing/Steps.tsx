@@ -11,7 +11,7 @@ interface StepsProps {
 const steps = [
   { key: "hold", n: "01", title: "Hold", short: `Keep ${brand.ticker} in a wallet you link.` },
   { key: "receive", n: "02", title: "Receive", short: "Get a share of funded rewards." },
-  { key: "redeem", n: "03", title: "Redeem", short: "Spend credits on game credit." },
+  { key: "redeem", n: "03", title: "Redeem", short: `Pay ${brand.ticker} for Shark Cards.` },
 ] as const;
 
 export function Steps({ sample }: StepsProps) {
@@ -162,15 +162,15 @@ function ReceivePanel({ sample }: StepsProps) {
 
 function RedeemPanel() {
   const rows = [
-    { name: "Red Shark Card", gta: "GTA$100,000", cost: "1,500 CR" },
-    { name: "Bull Shark Card", gta: "GTA$600,000", cost: "5,000 CR" },
-    { name: "Great White Shark Card", gta: "GTA$1,250,000", cost: "10,000 CR" },
+    { name: "Red Shark Card", gta: "GTA$100,000", cost: "0.02 SOL" },
+    { name: "Bull Shark Card", gta: "GTA$600,000", cost: "0.07 SOL" },
+    { name: "Great White Shark Card", gta: "GTA$1,250,000", cost: "0.14 SOL" },
   ];
   return (
     <div className="flex h-full flex-col">
       <h3 className="display text-4xl md:text-5xl">Redeem for game credit</h3>
       <p className="mt-4 max-w-xl text-muted">
-        Choose a Shark Card for your platform and region, confirm the credit cost, and receive a code with the provider&apos;s
+        Choose a Shark Card for your platform and region, pay the fixed SOL price in $SHARK, and receive a code with the provider&apos;s
         redemption instructions. We never ask for your Rockstar, Xbox or PlayStation password.
       </p>
       <ul className="mt-auto space-y-2 pt-8">
@@ -184,7 +184,7 @@ function RedeemPanel() {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted">Demo catalog. Credit costs are illustrative, not real prices.</p>
+      <p className="mt-3 text-xs text-muted">Demo catalog. SOL prices are placeholders for the operator to set.</p>
     </div>
   );
 }

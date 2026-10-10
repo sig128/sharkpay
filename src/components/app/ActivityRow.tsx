@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { fmtDateTime, fmtInt } from "@/lib/format";
+import { fmtDateTime, fmtSol } from "@/lib/format";
 
 export interface ActivityView {
   id: string;
@@ -7,9 +7,9 @@ export interface ActivityView {
   title: string;
   explanation: string;
   createdAt: number;
-  availableDelta: number;
+  payableDelta: number;
   pendingDelta: number;
-  reservedDelta: number;
+  paidDelta: number;
   refType: string | null;
   refId: string | null;
   status: "completed" | "pending" | "reversed";
@@ -19,28 +19,21 @@ export interface ActivityView {
 const kindTone: Record<string, string> = {
   allocation: "bg-mint/15 text-mint",
   clearance: "bg-mint/10 text-mint",
-  reservation: "bg-butter/10 text-butter",
-  capture: "bg-pink/15 text-[#ff9fd2]",
-  release: "bg-white/10 text-muted",
-  reversal: "bg-white/10 text-muted",
+  payout: "bg-mint/15 text-mint",
+  funding: "bg-white/10 text-muted",
 };
 const kindGlyph: Record<string, string> = {
   allocation: "+",
   clearance: "✓",
-  reservation: "◷",
-  capture: "★",
-  release: "↺",
-  reversal: "↺",
+  payout: "→",
 };
 
-/** The headline number: change to spendable credits, or pending credits for allocations. */
+/** Headline SOL change for this ledger event. */
 export function primaryDelta(a: ActivityView) {
   if (a.kind === "allocation") return { value: a.pendingDelta, label: "pending" };
-  if (a.kind === "clearance") return { value: a.availableDelta, label: "now available" };
-  if (a.kind === "capture") return { value: a.reservedDelta, label: "spent from reserved" };
-  if (a.kind === "reservation") return { value: a.availableDelta, label: "reserved" };
-  if (a.kind === "release" || a.kind === "reversal") return { value: a.availableDelta, label: "returned" };
-  return { value: a.availableDelta, label: "available" };
+  if (a.kind === "clearance") return { value: a.payableDelta, label: "ready to pay out" };
+  if (a.kind === "payout") return { value: a.paidDelta || -a.payableDelta, label: "paid" };
+  return { value: a.payableDelta, label: "SOL" };
 }
 
 export function ActivityRow({ a, onOpen }: { a: ActivityView; onOpen?: () => void }) {
@@ -61,7 +54,7 @@ export function ActivityRow({ a, onOpen }: { a: ActivityView; onOpen?: () => voi
       <span className="shrink-0 text-right">
         <span className={clsx("num block text-sm", d.value > 0 ? "text-mint" : d.value < 0 ? "text-warm" : "text-muted")}>
           {d.value > 0 ? "+" : d.value < 0 ? "−" : ""}
-          {fmtInt(Math.abs(d.value))} CR
+          {fmtSol(Math.abs(d.value))}
         </span>
         <span className="block text-[0.7rem] text-muted">{d.label}</span>
       </span>

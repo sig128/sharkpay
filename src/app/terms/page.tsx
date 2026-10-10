@@ -5,7 +5,7 @@ import { Contact, LegalPage, Section } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: `The rules for using ${brand.name}, reward credits, ${brand.ticker} payments and Shark Card redemptions.`,
+  description: `The rules for using ${brand.name}, SOL rewards, ${brand.ticker} payments and Shark Card redemptions.`,
   alternates: { canonical: "/terms" },
 };
 
@@ -36,21 +36,21 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section id="rewards" title="Rewards and credits">
+      <Section id="rewards" title="Rewards">
         <ul>
           <li>
             Rewards come from a pool funded by fees that have actually been collected and settled. Eligible holders
-            receive a share of that pool as reward credits. The pool, and your share, change every period and can be
-            zero.
+            receive a share of that pool in SOL. The pool, and your share, change every period and can be zero.
           </li>
           <li>
             <strong>There is no guaranteed return, yield or profit.</strong> Nothing on the Service is investment,
             financial, legal or tax advice.
           </li>
-          <li>{brand.legal.credits}</li>
+          <li>{brand.legal.rewards}</li>
           <li>
             Balances, prices and reward calculations are determined by our servers, not by what a browser or wallet
-            displays. We may correct credits that were issued in error or obtained through fraud or abuse.
+            displays. The website never sends SOL; the operator pays rewards from the payout wallet and records each
+            transfer.
           </li>
         </ul>
       </Section>
@@ -88,8 +88,8 @@ export default function TermsPage() {
           </li>
           <li>Existing Shark Cards and codes are not available for, and are not claimed to work in, GTA VI.</li>
           <li>
-            Products, prices and availability can change. If delivery fails, the credits or payment for that order are
-            returned as described below.
+            Products, prices and availability can change. If delivery fails, the {brand.ticker} payment for that order is
+            marked for refund as described below.
           </li>
         </ul>
       </Section>
@@ -115,8 +115,8 @@ export default function TermsPage() {
         <p>
           Apple Pay, Google Pay, Visa and Mastercard payments, and a {brand.name} payment card, are planned and shown as
           &ldquo;coming soon&rdquo;. They are not available today, and there is no card issuer or payment partner for
-          them yet. Joining a waitlist doesn&apos;t guarantee access. The Apple Wallet pass shows your balance only. It is
-          not a payment card and can&apos;t be used to spend.
+          them yet. Joining a waitlist doesn&apos;t guarantee access. The Apple Wallet pass shows your {brand.ticker}{" "}
+          holdings only. It is not a payment card and can&apos;t be used to spend.
         </p>
       </Section>
 
@@ -137,7 +137,7 @@ export default function TermsPage() {
           <li>Resell or trade codes in breach of the publisher&apos;s terms, or use the Service for fraud or money laundering.</li>
           <li>Attempt to access other people&apos;s accounts, codes or data, or interfere with the Service.</li>
         </ul>
-        <p>We may suspend or close accounts that break these terms, and withhold credits obtained by breaking them.</p>
+        <p>We may suspend or close accounts that break these terms, and withhold rewards obtained by breaking them.</p>
       </Section>
 
       <Section id="third-parties" title="Third-party services">

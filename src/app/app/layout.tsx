@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         {demo && (
           <div role="note" className="border-b border-butter/20 bg-butter/[0.07] px-4 py-2.5 text-center text-sm text-butter md:px-8">
             <strong className="font-semibold">Product preview.</strong> You&apos;re in an isolated demo sandbox with simulated
-            credits that are not real.{" "}
+            rewards that are not real.{" "}
             <Link href="/login" className="underline decoration-butter/50 underline-offset-2 hover:decoration-butter">
               Sign in for real
             </Link>

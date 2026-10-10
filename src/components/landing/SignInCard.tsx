@@ -61,7 +61,7 @@ export function SignInCard({ open, onOpenChange, options }: { open: boolean; onO
                   ))}
                 </ol>
                 <p className="mt-6 hidden text-xs text-muted md:block">
-                  Just looking? <strong className="text-warm">Explore demo</strong> opens an isolated sandbox with sample credits, no account needed.
+                  Just looking? <strong className="text-warm">Explore demo</strong> opens an isolated sandbox with sample data, no account needed.
                 </p>
               </div>
             </section>

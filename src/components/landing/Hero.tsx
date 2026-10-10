@@ -4,10 +4,9 @@ import { MembershipCard } from "@/components/brand/MembershipCard";
 import { PhoneFrame, WalletPass, type WalletPassData } from "@/components/brand/WalletPass";
 import { ButtonLink } from "@/components/ui/Button";
 import { PreviewBadge } from "@/components/ui/Badges";
-import { fmtInt } from "@/lib/format";
+import { fmtSol } from "@/lib/format";
 import { HeroStage } from "@/components/landing/fx/HeroStage";
 import { Embers } from "@/components/landing/fx/Embers";
-import { CountUp } from "@/components/landing/fx/CountUp";
 import { Magnetic } from "@/components/landing/fx/Magnetic";
 
 export interface HeroSample {
@@ -130,12 +129,12 @@ export function Hero({ sample }: { sample: HeroSample }) {
             </div>
             <div className="depth absolute bottom-[1%] left-0 w-[46%] max-w-[230px]" style={{ "--depth": 44, "--lift": -110 } as Vars}>
               <div className="glass bob rounded-2xl p-3 sm:p-4" style={{ "--bob": "6s", "--bob-delay": "-1.5s" } as Vars}>
-                <div className="eyebrow !text-[0.6rem]">Reward credits available</div>
+                <div className="eyebrow !text-[0.6rem]">SOL rewards ready</div>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <CountUp value={sample.available} className="num text-xl font-medium text-warm sm:text-2xl" />
-                  <span className="font-mono text-[0.65rem] text-muted">CR</span>
+                  <span className="num text-xl font-medium text-warm sm:text-2xl">{fmtSol(sample.available, { unit: false })}</span>
+                  <span className="font-mono text-[0.65rem] text-muted">SOL</span>
                 </div>
-                <div className="mt-1 font-mono text-[0.62rem] text-muted">+{fmtInt(sample.pending)} pending</div>
+                <div className="mt-1 font-mono text-[0.62rem] text-muted">+{fmtSol(sample.pending)} pending</div>
               </div>
             </div>
             <div className="depth absolute bottom-[6%] right-0 w-[48%] max-w-[250px]" style={{ "--depth": 38, "--lift": -80 } as Vars}>
@@ -148,7 +147,7 @@ export function Hero({ sample }: { sample: HeroSample }) {
                   </div>
                 </div>
                 <div className="mt-1.5 font-mono text-[0.62rem] text-muted">
-                  {fmtInt(sample.available)} / {fmtInt(sample.selectedCost)} CR
+                  {fmtSol(sample.available)} / {fmtSol(sample.selectedCost)}
                 </div>
               </div>
             </div>

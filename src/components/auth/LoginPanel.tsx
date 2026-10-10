@@ -205,7 +205,7 @@ export function LoginPanel({
           {demoBusy ? "Building sandbox…" : "Explore demo"}
         </Button>
       </div>
-      <p className="mt-3 text-xs text-muted">The demo is an isolated sandbox with sample credits. Nothing in it is real or redeemable.</p>
+      <p className="mt-3 text-xs text-muted">The demo is an isolated sandbox with sample data. Nothing in it is real or redeemable.</p>
       {error && <p role="alert" className="mt-3 text-sm text-[#ffb3b3]">{error}</p>}
 
       <button type="button" onClick={() => setMode("recovery")} className="mt-6 min-h-11 text-sm text-muted underline hover:text-warm">

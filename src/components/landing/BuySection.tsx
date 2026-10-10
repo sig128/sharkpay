@@ -63,7 +63,7 @@ export function BuySection({ info }: { info: BuyInfo }) {
               Get <span className="text-sunset-flow-soft">{brand.ticker}.</span>
             </h2>
             <p className="mt-5 max-w-xl text-lg text-muted">
-              Holding {brand.ticker} in a linked wallet is what earns reward credits. You buy it from third parties into your
+              Holding {brand.ticker} in a linked wallet is what earns SOL rewards. You buy it from third parties into your
               own wallet. {brand.name} never sells you tokens, never takes your card details and never holds your money.
             </p>
           </div>

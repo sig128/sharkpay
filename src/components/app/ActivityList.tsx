@@ -8,7 +8,7 @@ import { ActivityRow, primaryDelta, type ActivityView } from "./ActivityRow";
 import { EmptyState } from "./Page";
 import { Badge } from "@/components/ui/Badges";
 import { buttonClass } from "@/components/ui/Button";
-import { fmtDate, fmtDateTime, fmtInt } from "@/lib/format";
+import { fmtDate, fmtDateTime, fmtInt, fmtSol } from "@/lib/format";
 
 const FILTERS = [
   { id: "all", label: "All", match: () => true },
@@ -114,8 +114,8 @@ function Drawer({ a }: { a: ActivityView }) {
         <div>
           <div className={clsx("display text-5xl tabular-nums", d.value > 0 ? "text-mint" : "text-warm")}>
             {d.value > 0 ? "+" : d.value < 0 ? "−" : ""}
-            {fmtInt(Math.abs(d.value))}
-            <span className="ml-2 font-mono text-base text-muted">CR {d.label}</span>
+            {fmtSol(Math.abs(d.value))}
+            <span className="ml-2 font-mono text-base text-muted">{d.label}</span>
           </div>
           <div className="mt-2">
             {a.status === "pending" ? <Badge tone="butter">Pending</Badge> : a.status === "reversed" ? <Badge>Reversed</Badge> : <Badge tone="mint">Completed</Badge>}
@@ -124,9 +124,9 @@ function Drawer({ a }: { a: ActivityView }) {
         <Dialog.Description className="text-sm leading-relaxed text-muted">{a.explanation}</Dialog.Description>
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           {[
-            ["Available", a.availableDelta],
+            ["Payable", a.payableDelta],
             ["Pending", a.pendingDelta],
-            ["Reserved", a.reservedDelta],
+            ["Paid", a.paidDelta],
           ].map(([k, v]) => (
             <div key={k as string} className="rounded-xl border border-line p-3">
               <div className="text-muted">{k}</div>

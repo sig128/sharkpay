@@ -1,17 +1,17 @@
 import { brand } from "@/config/brand";
 import { PreviewBadge } from "@/components/ui/Badges";
-import { fmtDateTime, fmtInt, fmtUsd } from "@/lib/format";
+import { fmtDateTime, fmtInt, fmtSol } from "@/lib/format";
 import type { Transparency } from "@/lib/server/services/dashboard";
 
 export function Funding({ t }: { t: Transparency }) {
   const s = t.settlement;
-  const max = Math.max(s.grossUsd, 1);
+  const max = Math.max(s.grossLamports, 1);
   const rows = [
-    { label: "Settled gross proceeds", value: s.grossUsd, tone: "bg-white/25", note: `${fmtInt(t.tokens.sold)} ${brand.ticker} sold from collected fees` },
-    { label: "Swap, network and venue costs", value: -s.costsUsd, tone: "bg-[#ff6b6b]/60", note: "Actual deductions on settlement" },
-    { label: "Net settled proceeds", value: s.netUsd, tone: "bg-warm/70", note: "What funding is based on" },
-    { label: `Holder reward pool · ${t.config.holderShareBps / 100}%`, value: s.holderUsd, tone: "bg-sunset", note: `Backs ${fmtInt(t.credits.funded)} credits at ${fmtUsd(t.config.usdMicrosPerCredit / 1e6)} each` },
-    { label: `Operations & reserves · ${100 - t.config.holderShareBps / 100}%`, value: s.opsUsd, tone: "bg-lilac/70", note: "Infrastructure, fulfilment, support" },
+    { label: "Settled gross proceeds", value: s.grossLamports, tone: "bg-white/25", note: `${fmtInt(t.tokens.sold)} ${brand.ticker} sold from collected fees` },
+    { label: "Swap, network and venue costs", value: -s.costsLamports, tone: "bg-[#ff6b6b]/60", note: "Actual deductions on settlement" },
+    { label: "Net settled proceeds", value: s.netLamports, tone: "bg-warm/70", note: "What funding is based on" },
+    { label: `Holder reward pool · ${t.config.holderShareBps / 100}%`, value: s.holderLamports, tone: "bg-sunset", note: `Backs ${fmtSol(t.rewards.funded)} of holder rewards` },
+    { label: `Operations & reserves · ${100 - t.config.holderShareBps / 100}%`, value: s.opsLamports, tone: "bg-lilac/70", note: "Infrastructure, fulfilment, support" },
   ];
   return (
     <section id="transparency" className="relative scroll-mt-20 py-24 md:py-32" aria-labelledby="funding-title">
@@ -19,18 +19,18 @@ export function Funding({ t }: { t: Transparency }) {
         <div className="lg:col-span-5" data-reveal="left">
           <p className="eyebrow">Reward funding</p>
           <h2 id="funding-title" className="display mt-4 text-[clamp(3rem,7vw,5.5rem)]">
-            Every credit <span className="text-sunset-flow-soft">is backed.</span>
+            Every reward <span className="text-sunset-flow-soft">is backed.</span>
           </h2>
           <p className="mt-6 max-w-md text-lg text-muted">
-            Credits are created only from fees that were actually collected and sold, never from trading volume,
-            projections or unsold tokens. Funded credits are never more than the money set aside for them.
+            SOL rewards are created only from fees that were actually collected and sold, never from trading volume,
+            projections or unsold tokens. Funded rewards are never more than the SOL set aside for them.
           </p>
           <div className="mt-8 rounded-2xl border border-line p-5 text-sm text-muted">
             <div className="eyebrow mb-3">Demo configuration — not a deployed contract</div>
             <ul className="space-y-1.5">
               <li>Token-2022 transfer fee: <span className="num text-warm">{t.config.feeBps / 100}%</span> (illustrative)</li>
               <li>Holder share of net settled proceeds: <span className="num text-warm">{t.config.holderShareBps / 100}%</span></li>
-              <li>Credit backing: <span className="num text-warm">{fmtUsd(t.config.usdMicrosPerCredit / 1e6)}</span> of holder funding per credit</li>
+              <li>Rewards paid in: <span className="num text-warm">SOL</span></li>
               <li>Pending clearance: <span className="num text-warm">{t.config.clearanceHours}h</span> · period length <span className="num text-warm">{t.config.periodDays} days</span></li>
             </ul>
             <p className="mt-3">
@@ -51,7 +51,7 @@ export function Funding({ t }: { t: Transparency }) {
                 <li key={r.label}>
                   <div className="flex items-baseline justify-between gap-4 text-sm">
                     <span className="font-medium">{r.label}</span>
-                    <span className="num text-warm">{r.value < 0 ? "−" : ""}{fmtUsd(Math.abs(r.value))}</span>
+                    <span className="num text-warm">{r.value < 0 ? "−" : ""}{fmtSol(Math.abs(r.value))}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-white/[0.06]">
                     <div className={`bar-grow h-full rounded-full ${r.tone}`} style={{ width: `${Math.max(1.5, (Math.abs(r.value) / max) * 100)}%` }} />
@@ -63,10 +63,10 @@ export function Funding({ t }: { t: Transparency }) {
 
             <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-4">
               {[
-                ["Credits funded", fmtInt(t.credits.funded)],
-                ["Allocated to members", fmtInt(t.credits.allocated)],
-                ["Unallocated (carried)", fmtInt(t.credits.unallocated)],
-                ["Outstanding obligations", fmtInt(t.credits.outstanding)],
+                ["SOL funded", fmtSol(t.rewards.funded)],
+                ["Allocated to members", fmtSol(t.rewards.allocated)],
+                ["Unallocated (carried)", fmtSol(t.rewards.unallocated)],
+                ["Outstanding", fmtSol(t.rewards.outstanding)],
               ].map(([k, v]) => (
                 <div key={k} className="bg-surface p-4">
                   <dt className="text-xs text-muted">{k}</dt>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { clsx } from "clsx";
 import { brand } from "@/config/brand";
+import { fmtSol } from "@/lib/format";
 import { Fin } from "./Fin";
 
 export interface MembershipCardProps {
@@ -86,7 +87,7 @@ export function MembershipCard({
         style={style}
         className="relative aspect-[1.586/1] w-full rounded-[var(--radius-card)] transition-transform duration-300 ease-out [transform-style:preserve-3d] [transform:rotateX(calc(var(--px)+var(--tx)))_rotateY(calc(var(--py)+var(--ty)))_rotateZ(var(--pz))] motion-reduce:transition-none"
         role="img"
-        aria-label={`${brand.name} rewards membership card for ${memberName}, membership ${membershipId}${balance !== null ? `, ${balance.toLocaleString("en-US")} reward credits` : ""}${demo ? ", product preview" : ""}`}
+        aria-label={`${brand.name} rewards membership card for ${memberName}, membership ${membershipId}${balance !== null ? `, ${balance.toLocaleString("en-US")} lamports SOL rewards` : ""}${demo ? ", product preview" : ""}`}
       >
         {/* body */}
         <div
@@ -135,13 +136,13 @@ export function MembershipCard({
 
           <div>
             <div className="font-mono text-[max(0.42rem,2.2cqw)] uppercase tracking-[0.2em] opacity-75">
-              {demo ? "Illustrative balance" : "Available reward credits"}
+              {demo ? "Illustrative SOL rewards" : "SOL rewards"}
             </div>
             <div className="mt-1 flex items-baseline gap-2">
               <span className="font-display text-[max(1.4rem,12.5cqw)] font-extrabold leading-none tabular-nums">
-                {balance === null ? "—" : balance.toLocaleString("en-US")}
+                {balance === null ? "—" : fmtSol(balance, { unit: false })}
               </span>
-              <span className="font-mono text-[max(0.45rem,2.6cqw)] font-medium tracking-[0.12em]">CREDITS</span>
+              <span className="font-mono text-[max(0.45rem,2.6cqw)] font-medium tracking-[0.12em]">SOL</span>
             </div>
           </div>
 
