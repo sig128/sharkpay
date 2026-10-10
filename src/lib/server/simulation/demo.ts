@@ -23,7 +23,7 @@ export const DEMO_FIXTURE = {
   pending: 20_000_000,
   paid: 110_000_000,
   selectedTier: "bull",
-  selectedCost: 70_000_000,
+  selectedCost: 1_500_000_000,
   quickTier: "red",
   periodTargets: [50_000_000, 60_000_000, 80_000_000, 20_000_000],
   pastRedemptionTier: "red",
@@ -236,6 +236,7 @@ let publicRealmPromise: Promise<string> | null = null;
 export function publicSampleRealm(): Promise<string> {
   publicRealmPromise ??= (async () => {
     if (one(`SELECT 1 FROM reward_periods WHERE realm = ? AND status = 'finalized'`, PUBLIC_SAMPLE_REALM)) {
+      seedDemoCatalog(PUBLIC_SAMPLE_REALM);
       return PUBLIC_SAMPLE_REALM;
     }
     await createDemoRealm(Date.now(), PUBLIC_SAMPLE_REALM);

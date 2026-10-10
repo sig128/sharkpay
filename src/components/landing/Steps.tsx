@@ -162,9 +162,9 @@ function ReceivePanel({ sample }: StepsProps) {
 
 function RedeemPanel() {
   const rows = [
-    { name: "Red Shark Card", gta: "GTA$100,000", cost: "0.02 SOL" },
-    { name: "Bull Shark Card", gta: "GTA$600,000", cost: "0.07 SOL" },
-    { name: "Great White Shark Card", gta: "GTA$1,250,000", cost: "0.14 SOL" },
+    { name: "Red Shark Card", gta: "GTA$100,000", cost: "0.45 SOL" },
+    { name: "Bull Shark Card", gta: "GTA$600,000", cost: "1.5 SOL" },
+    { name: "Great White Shark Card", gta: "GTA$1,250,000", cost: "3 SOL" },
   ];
   return (
     <div className="flex h-full flex-col">

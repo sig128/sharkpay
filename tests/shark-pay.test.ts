@@ -41,8 +41,8 @@ import {
 import type { Session } from "@/lib/server/auth/sessions";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
-const BULL_LAMPORTS = 70_000_000;
-const NET_AT_HALF = 21_000_000n;
+const BULL_LAMPORTS = 1_500_000_000;
+const NET_AT_HALF = 450_000_000n;
 
 const priceFetch = (usdPrice: number, liquidity = 50_000, solUsd = 150) =>
   (async () =>

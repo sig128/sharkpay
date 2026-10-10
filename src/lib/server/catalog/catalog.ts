@@ -56,12 +56,12 @@ export interface CatalogItem {
  * row is flagged `is_demo`. A connected provider catalog replaces these rows.
  */
 export const DEMO_TIERS = [
-  { tier: "red", name: "Red Shark Card", gta: 100_000, lamports: 20_000_000 },
-  { tier: "tiger", name: "Tiger Shark Card", gta: 250_000, lamports: 35_000_000 },
-  { tier: "bull", name: "Bull Shark Card", gta: 600_000, lamports: 70_000_000 },
-  { tier: "great_white", name: "Great White Shark Card", gta: 1_250_000, lamports: 140_000_000 },
-  { tier: "whale", name: "Whale Shark Card", gta: 4_250_000, lamports: 350_000_000 },
-  { tier: "megalodon", name: "Megalodon Shark Card", gta: 10_000_000, lamports: 700_000_000 },
+  { tier: "red", name: "Red Shark Card", gta: 100_000, lamports: 450_000_000 },
+  { tier: "tiger", name: "Tiger Shark Card", gta: 250_000, lamports: 750_000_000 },
+  { tier: "bull", name: "Bull Shark Card", gta: 600_000, lamports: 1_500_000_000 },
+  { tier: "great_white", name: "Great White Shark Card", gta: 1_250_000, lamports: 3_000_000_000 },
+  { tier: "whale", name: "Whale Shark Card", gta: 4_250_000, lamports: 7_500_000_000 },
+  { tier: "megalodon", name: "Megalodon Shark Card", gta: 10_000_000, lamports: 15_000_000_000 },
 ] as const;
 
 export function seedDemoCatalog(realm: string, now = Date.now()) {
@@ -88,6 +88,13 @@ export function seedDemoCatalog(realm: string, now = Date.now()) {
           outOfStock ? 0 : 25,
           outOfStock ? "out_of_stock" : "available",
           now,
+        );
+        run(
+          `UPDATE catalog_items SET sol_price_lamports = ?, updated_at = ? WHERE realm = ? AND sku = ? AND is_demo = 1`,
+          t.lamports,
+          now,
+          realm,
+          sku,
         );
       }
     }
