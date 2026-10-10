@@ -9,6 +9,7 @@ export type ProviderAvailability = "live" | "unavailable" | "coming_soon";
 export interface GamingProviderInfo {
   id: "microsoft" | "playstation" | "steam";
   platform: "xbox" | "playstation" | "pc";
+  name: string;
   label: string;
   detail: string;
   availability: ProviderAvailability;
@@ -34,6 +35,7 @@ export const playStationProvider: PlayStationIdentityProvider = {
 
 export interface SocialProviderInfo {
   id: "google" | "x";
+  name: string;
   label: string;
   detail: string;
   availability: ProviderAvailability;
@@ -45,12 +47,14 @@ export function socialProviders(): SocialProviderInfo[] {
   return [
     {
       id: "google",
+      name: "Google",
       label: "Continue with Google",
       detail: i.google ? "Name and profile picture only" : "Not configured",
       availability: i.google ? "live" : "unavailable",
     },
     {
       id: "x",
+      name: "X",
       label: "Continue with X",
       detail: i.x ? "Read-only profile. We never post for you" : "Not configured",
       availability: i.x ? "live" : "unavailable",
@@ -64,6 +68,7 @@ export function gamingProviders(): GamingProviderInfo[] {
     {
       id: "microsoft",
       platform: "xbox",
+      name: i.xbox ? "Xbox" : "Microsoft",
       label: i.xbox ? "Continue with Xbox" : "Continue with Microsoft",
       detail: i.xbox
         ? "Microsoft account sign-in, then Xbox profile verification"
@@ -76,6 +81,7 @@ export function gamingProviders(): GamingProviderInfo[] {
     {
       id: "playstation",
       platform: "playstation",
+      name: "PlayStation",
       label: "PlayStation sign-in — coming soon",
       detail: "Use email sign-in and choose PlayStation as your reward platform",
       availability: "coming_soon",
@@ -84,6 +90,7 @@ export function gamingProviders(): GamingProviderInfo[] {
     {
       id: "steam",
       platform: "pc",
+      name: "Steam",
       label: "Continue with Steam",
       detail: i.steam ? "Steam OpenID. Proves your Steam account, not game ownership" : "Not enabled on this server",
       availability: i.steam ? "live" : "unavailable",

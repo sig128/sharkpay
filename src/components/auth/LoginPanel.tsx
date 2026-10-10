@@ -1,32 +1,76 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
-import { Button, buttonClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 import { EmailCodeForm } from "@/components/app/AccountActions";
 import { ApiError, callApi } from "@/lib/client";
 import type { GamingProviderInfo, SocialProviderInfo } from "@/lib/server/auth/providers";
+import { GoogleLogo, MicrosoftLogo, PlayStationLogo, SteamLogo, XLogo } from "@/components/brand/ProviderLogos";
 
-function ProviderGlyph({ id }: { id: GamingProviderInfo["id"] }) {
-  if (id === "steam")
+type ProviderId = GamingProviderInfo["id"] | SocialProviderInfo["id"];
+
+const LOGOS: Record<ProviderId, (p: { className?: string }) => ReactNode> = {
+  microsoft: MicrosoftLogo,
+  playstation: PlayStationLogo,
+  steam: SteamLogo,
+  google: GoogleLogo,
+  x: XLogo,
+};
+
+const ORDER: ProviderId[] = ["google", "x", "microsoft", "playstation", "steam"];
+
+interface Tile {
+  id: ProviderId;
+  name: string;
+  label: string;
+  href: string | null;
+  onClick?: () => void;
+  badge?: string;
+  note: string;
+}
+
+function ProviderTile({ tile, onBlocked }: { tile: Tile; onBlocked: (note: string) => void }) {
+  const Logo = LOGOS[tile.id];
+  const disabled = !tile.href && !tile.onClick;
+  const face = (
+    <>
+      <span
+        className={clsx(
+          "relative flex size-12 items-center sm:size-14 justify-center rounded-2xl border border-line bg-white/[0.04] transition-[transform,border-color,background] duration-200",
+          !disabled && "group-hover:-translate-y-0.5 group-hover:border-line-strong group-hover:bg-white/[0.09]",
+          disabled && "opacity-45 grayscale",
+        )}
+      >
+        <Logo className="size-5 text-warm sm:size-6" />
+        {tile.badge && (
+          <span className="absolute -right-1.5 -top-1.5 rounded-full border border-line bg-midnight px-1.5 py-px text-[0.6rem] font-semibold uppercase tracking-wide text-butter">
+            {tile.badge}
+          </span>
+        )}
+      </span>
+      <span className={clsx("text-[0.7rem] font-medium", disabled ? "text-muted/70" : "text-muted group-hover:text-warm")}>{tile.name}</span>
+    </>
+  );
+  const cls = "group flex w-14 flex-col sm:w-16 items-center gap-1.5 rounded-2xl outline-offset-4";
+  if (tile.href)
     return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-        <circle cx="15.5" cy="8.5" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="8" cy="16" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M10 15l3-4" stroke="currentColor" strokeWidth="1.8" />
-      </svg>
-    );
-  if (id === "playstation")
-    return (
-      <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-        <rect x="4" y="6" width="16" height="12" rx="6" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      </svg>
+      <a href={tile.href} aria-label={tile.label} title={tile.note} className={cls}>
+        {face}
+      </a>
     );
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path d="M4 4h7.5v7.5H4zM12.5 4H20v7.5h-7.5zM4 12.5h7.5V20H4zM12.5 12.5H20V20h-7.5z" fill="currentColor" opacity="0.85" />
-    </svg>
+    <button
+      type="button"
+      aria-label={disabled ? `${tile.label} (${tile.note})` : tile.label}
+      aria-disabled={disabled || undefined}
+      title={tile.note}
+      onClick={() => (disabled ? onBlocked(tile.note) : tile.onClick?.())}
+      className={clsx(cls, disabled && "cursor-not-allowed")}
+    >
+      {face}
+    </button>
   );
 }
 
@@ -47,6 +91,7 @@ export function LoginPanel({
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState("");
   const [recBusy, setRecBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   const startDemo = async () => {
     setDemoBusy(true);
@@ -112,71 +157,40 @@ export function LoginPanel({
     );
   }
 
+  const tiles: Tile[] = [...social, ...providers]
+    .map((p): Tile => {
+      if (p.id === "playstation")
+        return emailEnabled
+          ? { id: p.id, name: p.name, label: "PlayStation players: sign in with an email code", href: null, onClick: () => setMode("email"), badge: "Email", note: "Sign in with an email code, then pick PlayStation as your platform" }
+          : { id: p.id, name: p.name, label: "PlayStation sign-in", href: null, badge: "Soon", note: "PlayStation sign-in is coming soon" };
+      const live = p.availability === "live";
+      return {
+        id: p.id,
+        name: p.name,
+        label: p.label,
+        href: live ? `/api/auth/${p.id}/start` : null,
+        badge: live ? undefined : "Soon",
+        note: live ? p.detail : `${p.name} sign-in isn't switched on yet`,
+      };
+    })
+    .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+
   return (
-    <div className="@container mt-8">
-      <ul className="space-y-3">
-        {providers.map((p) => {
-          const live = p.availability === "live";
-          const inner = (
-            <>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
-                <ProviderGlyph id={p.id} />
-              </span>
-              <span className="min-w-0 flex-1 text-left">
-                <span className="block font-semibold">{p.label}</span>
-                <span className="block text-xs font-normal text-muted">{p.detail}</span>
-              </span>
-            </>
-          );
-          return (
-            <li key={p.id}>
-              {live ? (
-                <a href={`/api/auth/${p.id}/start`} className={clsx(buttonClass("secondary", "lg", "w-full justify-start gap-3 text-left"))}>
-                  {inner}
-                </a>
-              ) : (
-                <div aria-disabled="true" className={clsx(buttonClass("secondary", "lg", "w-full cursor-not-allowed justify-start gap-3 opacity-55"))}>
-                  {inner}
-                </div>
-              )}
-            </li>
-          );
-        })}
+    <div className="mt-8">
+      <ul className="flex flex-wrap justify-center gap-x-2.5 gap-y-4 sm:justify-start sm:gap-x-3" aria-label="Sign in with">
+        {tiles.map((t) => (
+          <li key={t.id}>
+            <ProviderTile tile={t} onBlocked={setNote} />
+          </li>
+        ))}
       </ul>
+      <p className="mt-4 text-xs text-muted" aria-live="polite">
+        {note ?? "You sign in on the provider's own page. We never see your password."}
+      </p>
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
       </div>
-
-      <ul className="mb-3 grid grid-cols-1 gap-3 @md:grid-cols-2">
-        {social.map((p) => {
-          const live = p.availability === "live";
-          const inner = (
-            <>
-              <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-sm font-bold">
-                {p.id === "google" ? "G" : "𝕏"}
-              </span>
-              <span className="min-w-0 text-left">
-                <span className="block font-semibold">{p.label}</span>
-                {!live && <span className="block text-[0.7rem] font-normal text-muted">{p.detail}</span>}
-              </span>
-            </>
-          );
-          return (
-            <li key={p.id}>
-              {live ? (
-                <a href={`/api/auth/${p.id}/start`} title={p.detail} className={buttonClass("secondary", "md", "w-full justify-start gap-2.5")}>
-                  {inner}
-                </a>
-              ) : (
-                <div aria-disabled="true" className={buttonClass("secondary", "md", "h-auto min-h-11 w-full cursor-not-allowed justify-start gap-2.5 py-2 opacity-55")}>
-                  {inner}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button variant="secondary" onClick={() => setMode("email")} disabled={!emailEnabled}>
