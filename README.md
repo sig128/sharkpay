@@ -9,6 +9,16 @@ SHARKCARD is a holder rewards platform. Token fees are collected and settled. Th
 
 The brand name and ticker are configurable (`NEXT_PUBLIC_BRAND_NAME`, `NEXT_PUBLIC_TOKEN_TICKER`). The defaults are `SHARKCARD` and `$SHARK` (token name `SHARKCARD`, `NEXT_PUBLIC_TOKEN_NAME`).
 
+### Deploying on Render
+
+`render.yaml` is a Render Blueprint: one web service with a 1 GB persistent disk at `/var/data` for the SQLite database.
+
+1. Render Dashboard → **New → Blueprint** → connect this GitHub repo → **Apply**. Render generates `SESSION_SECRET`, `DATA_ENCRYPTION_KEY` and the webhook secrets, and asks for the `sync: false` values. Leave any you don't have yet empty.
+2. The site runs at `https://sharkcard.onrender.com` (or similar) straight away; `APP_URL` falls back to Render's address when it's empty.
+3. Custom domain: service → **Settings → Custom Domains** → add it, create the DNS records Render shows, then set `APP_URL=https://yourdomain.com` and redeploy. Update the redirect URLs at Google, X and Microsoft to the new domain.
+
+The service must stay at **one instance**: SQLite on a disk can't be shared. Render snapshots disks daily. A disk needs a paid instance (Starter or higher), and deploys have a few seconds of downtime because the disk moves between instances.
+
 ### Paying for Shark Cards with $SHARK
 
 In the rewards dialog members choose **Reward credits** or **$SHARK**. Apple Pay, Google Pay and Visa / Mastercard are shown as coming soon.

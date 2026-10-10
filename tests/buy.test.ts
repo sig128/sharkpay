@@ -32,10 +32,13 @@ describe("buy options", () => {
   });
 
   it("builds a MoonPay link with only the publishable key", () => {
+    const live = buyInfo({ ...base, TOKEN_MINT: USDC, MOONPAY_PUBLISHABLE_KEY: "pk_live_abc" });
+    expect(new URL(live.options.find((o) => o.id === "card")!.href!).origin).toBe("https://buy.moonpay.com");
+
     const info = buyInfo({ ...base, TOKEN_MINT: USDC, MOONPAY_PUBLISHABLE_KEY: "pk_test_abc" });
     const card = info.options.find((o) => o.id === "card")!;
     const url = new URL(card.href!);
-    expect(url.origin).toBe("https://buy.moonpay.com");
+    expect(url.origin).toBe("https://buy-sandbox.moonpay.com");
     expect(url.searchParams.get("apiKey")).toBe("pk_test_abc");
     expect(url.searchParams.get("currencyCode")).toBe("sol");
     expect(url.searchParams.has("walletAddress")).toBe(false);

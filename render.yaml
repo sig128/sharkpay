@@ -1,0 +1,81 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repo.
+# Secrets marked `sync: false` are asked for once when the Blueprint is created
+# and live only in Render (never in git). Leave any you don't have yet empty.
+services:
+  - type: web
+    name: sharkcard
+    runtime: node
+    # A persistent disk (needed for the SQLite database) requires a paid instance.
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npx next start -H 0.0.0.0 -p $PORT
+    healthCheckPath: /api/health
+    disk:
+      name: sharkcard-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: APP_MODE
+        value: production
+      # Leave empty to use the onrender.com address; set to https://yourdomain.com
+      # after adding the custom domain.
+      - key: APP_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATA_ENCRYPTION_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /var/data/sharkcard.db
+
+      - key: NEXT_PUBLIC_BRAND_NAME
+        value: SHARKCARD
+      - key: NEXT_PUBLIC_TOKEN_TICKER
+        value: $SHARK
+      - key: NEXT_PUBLIC_TOKEN_NAME
+        value: SHARKCARD
+
+      # Token and payments
+      - key: TOKEN_MINT
+        sync: false
+      - key: TOKEN_DECIMALS
+        value: "6"
+      - key: TOKEN_PROGRAM
+        value: token-2022
+      - key: SHARK_TREASURY_WALLET
+        value: 5f1oiop1b3Bxw8ppwbAECAVXq118mHGCVLEsp4EFPSxb
+      - key: SOLANA_RPC_URL
+        sync: false
+      - key: MOONPAY_PUBLISHABLE_KEY
+        sync: false
+      - key: FULFILLMENT_PROVIDER
+        value: none
+      - key: FULFILLMENT_WEBHOOK_SECRET
+        generateValue: true
+      - key: CHAIN_INGEST_SECRET
+        generateValue: true
+
+      # Sign-in providers
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: X_CLIENT_ID
+        sync: false
+      - key: X_CLIENT_SECRET
+        sync: false
+      - key: MICROSOFT_CLIENT_ID
+        sync: false
+      - key: MICROSOFT_CLIENT_SECRET
+        sync: false
+      - key: STEAM_LOGIN_ENABLED
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

@@ -67,7 +67,10 @@ let cached: Env | null = null;
 
 export function env(): Env {
   if (cached) return cached;
-  const parsed = schema.parse(process.env);
+  const parsed = schema.parse({
+    ...process.env,
+    APP_URL: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || undefined,
+  });
   if (parsed.APP_MODE === "production") {
     if (!parsed.SESSION_SECRET || parsed.SESSION_SECRET.length < 32) {
       throw new Error("SESSION_SECRET (>= 32 chars) is required when APP_MODE=production");

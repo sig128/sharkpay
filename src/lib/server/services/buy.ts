@@ -49,7 +49,7 @@ export function buyInfo(e: Env = env()): BuyInfo {
     : !e.MOONPAY_PUBLISHABLE_KEY
       ? { href: null, status: "not_configured" }
       : {
-          href: `https://buy.moonpay.com/?${new URLSearchParams({
+          href: `${e.MOONPAY_PUBLISHABLE_KEY.startsWith("pk_test_") ? "https://buy-sandbox.moonpay.com" : "https://buy.moonpay.com"}/?${new URLSearchParams({
             apiKey: e.MOONPAY_PUBLISHABLE_KEY,
             currencyCode: "sol",
             baseCurrencyCode: "usd",
