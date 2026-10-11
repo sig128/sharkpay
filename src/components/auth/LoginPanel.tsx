@@ -20,7 +20,6 @@ const LOGOS: Record<ProviderId, (p: { className?: string }) => ReactNode> = {
 };
 
 const ORDER: ProviderId[] = ["google", "x", "microsoft", "playstation", "steam"];
-const EMAIL_INPUT_ID = "email-login-addr";
 
 interface Tile {
   id: ProviderId;
@@ -87,7 +86,7 @@ export function LoginPanel({
   devMode: boolean;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"main" | "recovery">("main");
+  const [mode, setMode] = useState<"main" | "email" | "recovery">("main");
   const [demoBusy, setDemoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState("");
@@ -146,11 +145,27 @@ export function LoginPanel({
     );
   }
 
+  if (mode === "email") {
+    return (
+      <div className="mt-8 space-y-4">
+        <EmailCodeForm purpose="login" cta="Email me a code" devMode={devMode} onDone={(to) => router.push(to ?? "/app")} />
+        <p className="text-xs text-muted">We&apos;ll email you a 6-digit code. No password needed.</p>
+        <button type="button" onClick={() => setMode("main")} className="min-h-11 text-sm text-muted underline hover:text-warm">
+          ← All sign-in options
+        </button>
+      </div>
+    );
+  }
+
+  const google = social.find((p) => p.id === "google");
+  const googleLive = google?.availability === "live";
+
   const tiles: Tile[] = [...social, ...providers]
+    .filter((p) => p.id !== "google")
     .map((p): Tile => {
       if (p.id === "playstation")
         return emailEnabled
-          ? { id: p.id, name: p.name, label: "PlayStation players: sign in with an email code", href: null, onClick: () => document.getElementById(EMAIL_INPUT_ID)?.focus(), badge: "Email", note: "Sign in with your email above, then pick PlayStation as your platform" }
+          ? { id: p.id, name: p.name, label: "PlayStation players: sign in with an email code", href: null, onClick: () => setMode("email"), badge: "Email", note: "Sign in with an email code, then pick PlayStation as your platform" }
           : { id: p.id, name: p.name, label: "PlayStation sign-in", href: null, badge: "Soon", note: "PlayStation sign-in is coming soon" };
       const live = p.availability === "live";
       return {
@@ -166,17 +181,24 @@ export function LoginPanel({
 
   return (
     <div className="mt-8">
-      <EmailCodeForm
-        purpose="login"
-        cta="Continue with email"
-        devMode={devMode}
-        disabled={!emailEnabled}
-        hideLabel
-        onDone={(to) => router.push(to ?? "/app")}
-      />
-      <p className="mt-2 text-xs text-muted">
-        {emailEnabled ? "We'll email you a 6-digit code. No password needed." : "Email sign-in is being set up. Use an account below for now."}
-      </p>
+      {googleLive ? (
+        <a
+          href="/api/auth/google/start"
+          className="flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-white px-5 text-sm font-semibold text-[#1f1f1f] shadow-sm transition-colors hover:bg-white/90"
+        >
+          <GoogleLogo className="size-5" />
+          Continue with Google
+        </a>
+      ) : (
+        <button
+          type="button"
+          disabled
+          className="flex min-h-12 w-full cursor-not-allowed items-center justify-center gap-3 rounded-full bg-white/10 px-5 text-sm font-semibold text-muted"
+        >
+          <GoogleLogo className="size-5 opacity-60 grayscale" />
+          Google sign-in isn&apos;t switched on yet
+        </button>
+      )}
 
       <div className="my-6 flex items-center gap-3 text-xs text-muted">
         <span className="h-px flex-1 bg-line" /> or continue with <span className="h-px flex-1 bg-line" />
@@ -197,6 +219,12 @@ export function LoginPanel({
         <a href="/terms" className="text-warm/90 underline underline-offset-2">Terms</a> and{" "}
         <a href="/privacy" className="text-warm/90 underline underline-offset-2">Privacy Policy</a>.
       </p>
+
+      {emailEnabled && (
+        <button type="button" onClick={() => setMode("email")} className="mt-3 min-h-11 text-sm text-muted underline hover:text-warm">
+          Sign in with an email code instead
+        </button>
+      )}
 
       <Button variant="secondary" className="mt-6 w-full" onClick={startDemo} disabled={demoBusy}>
         {demoBusy ? "Building sandbox…" : "Explore demo"}
