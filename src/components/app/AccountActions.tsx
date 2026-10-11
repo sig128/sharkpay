@@ -24,12 +24,16 @@ export function EmailCodeForm({
   devMode,
   platform,
   onDone,
+  disabled,
+  hideLabel,
 }: {
   purpose: "login" | "link" | "reauth";
   cta: string;
   devMode: boolean;
   platform?: string;
   onDone?: (redirect?: string) => void;
+  disabled?: boolean;
+  hideLabel?: boolean;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -75,10 +79,20 @@ export function EmailCodeForm({
     >
       {step === "email" ? (
         <div>
-          <label htmlFor={`${idBase}-addr`} className="mb-1.5 block text-sm font-semibold">
+          <label htmlFor={`${idBase}-addr`} className={hideLabel ? "sr-only" : "mb-1.5 block text-sm font-semibold"}>
             Email
           </label>
-          <input id={`${idBase}-addr`} type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className={inputClass} />
+          <input
+            id={`${idBase}-addr`}
+            type="email"
+            required
+            autoComplete="email"
+            disabled={disabled}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@gmail.com"
+            className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`}
+          />
         </div>
       ) : (
         <div>
@@ -107,7 +121,7 @@ export function EmailCodeForm({
         </div>
       )}
       <ErrorText error={error} />
-      <Button type="submit" variant={purpose === "login" ? "primary" : "secondary"} className="w-full" disabled={busy}>
+      <Button type="submit" variant={purpose === "login" ? "primary" : "secondary"} className="w-full" disabled={busy || disabled}>
         {busy ? "Working…" : step === "email" ? cta : "Verify code"}
       </Button>
     </form>

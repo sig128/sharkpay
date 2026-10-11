@@ -48,8 +48,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <span className="text-sunset">Your rewards.</span>
           </h1>
           <p className="mt-4 text-muted">
-            Sign in with a gaming account. We never ask for your Rockstar, Xbox or PlayStation password — sign-in happens on the
-            provider&apos;s own page.
+            Sign in with your email or an account you already have. We never ask for your Rockstar, Xbox or PlayStation
+            password.
           </p>
 
           {error && (

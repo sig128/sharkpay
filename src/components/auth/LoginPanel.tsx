@@ -20,6 +20,7 @@ const LOGOS: Record<ProviderId, (p: { className?: string }) => ReactNode> = {
 };
 
 const ORDER: ProviderId[] = ["google", "x", "microsoft", "playstation", "steam"];
+const EMAIL_INPUT_ID = "email-login-addr";
 
 interface Tile {
   id: ProviderId;
@@ -86,7 +87,7 @@ export function LoginPanel({
   devMode: boolean;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"main" | "email" | "recovery">("main");
+  const [mode, setMode] = useState<"main" | "recovery">("main");
   const [demoBusy, setDemoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState("");
@@ -104,18 +105,6 @@ export function LoginPanel({
       setDemoBusy(false);
     }
   };
-
-  if (mode === "email") {
-    return (
-      <div className="mt-8 space-y-4">
-        <EmailCodeForm purpose="login" cta="Email me a code" devMode={devMode} onDone={(to) => router.push(to ?? "/app")} />
-        <p className="text-xs text-muted">Good for PlayStation players while PlayStation sign-in isn&apos;t available. You&apos;ll pick your platform next.</p>
-        <button type="button" onClick={() => setMode("main")} className="min-h-11 text-sm text-muted underline hover:text-warm">
-          ← All sign-in options
-        </button>
-      </div>
-    );
-  }
 
   if (mode === "recovery") {
     return (
@@ -161,7 +150,7 @@ export function LoginPanel({
     .map((p): Tile => {
       if (p.id === "playstation")
         return emailEnabled
-          ? { id: p.id, name: p.name, label: "PlayStation players: sign in with an email code", href: null, onClick: () => setMode("email"), badge: "Email", note: "Sign in with an email code, then pick PlayStation as your platform" }
+          ? { id: p.id, name: p.name, label: "PlayStation players: sign in with an email code", href: null, onClick: () => document.getElementById(EMAIL_INPUT_ID)?.focus(), badge: "Email", note: "Sign in with your email above, then pick PlayStation as your platform" }
           : { id: p.id, name: p.name, label: "PlayStation sign-in", href: null, badge: "Soon", note: "PlayStation sign-in is coming soon" };
       const live = p.availability === "live";
       return {
@@ -177,6 +166,22 @@ export function LoginPanel({
 
   return (
     <div className="mt-8">
+      <EmailCodeForm
+        purpose="login"
+        cta="Continue with email"
+        devMode={devMode}
+        disabled={!emailEnabled}
+        hideLabel
+        onDone={(to) => router.push(to ?? "/app")}
+      />
+      <p className="mt-2 text-xs text-muted">
+        {emailEnabled ? "We'll email you a 6-digit code. No password needed." : "Email sign-in is being set up. Use an account below for now."}
+      </p>
+
+      <div className="my-6 flex items-center gap-3 text-xs text-muted">
+        <span className="h-px flex-1 bg-line" /> or continue with <span className="h-px flex-1 bg-line" />
+      </div>
+
       <ul className="flex flex-wrap justify-center gap-x-2.5 gap-y-4 sm:justify-start sm:gap-x-3" aria-label="Sign in with">
         {tiles.map((t) => (
           <li key={t.id}>
@@ -193,18 +198,9 @@ export function LoginPanel({
         <a href="/privacy" className="text-warm/90 underline underline-offset-2">Privacy Policy</a>.
       </p>
 
-      <div className="my-6 flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Button variant="secondary" onClick={() => setMode("email")} disabled={!emailEnabled}>
-          {emailEnabled ? "Use email code" : "Email sign-in unavailable"}
-        </Button>
-        <Button onClick={startDemo} disabled={demoBusy}>
-          {demoBusy ? "Building sandbox…" : "Explore demo"}
-        </Button>
-      </div>
+      <Button variant="secondary" className="mt-6 w-full" onClick={startDemo} disabled={demoBusy}>
+        {demoBusy ? "Building sandbox…" : "Explore demo"}
+      </Button>
       <p className="mt-3 text-xs text-muted">The demo is an isolated sandbox with sample data. Nothing in it is real or redeemable.</p>
       {error && <p role="alert" className="mt-3 text-sm text-[#ffb3b3]">{error}</p>}
 
