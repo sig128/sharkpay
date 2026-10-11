@@ -60,9 +60,6 @@ export function SignInCard({ open, onOpenChange, options }: { open: boolean; onO
                     </li>
                   ))}
                 </ol>
-                <p className="mt-6 hidden text-xs text-muted md:block">
-                  Just looking? <strong className="text-warm">Explore demo</strong> opens an isolated sandbox with sample data, no account needed.
-                </p>
               </div>
             </section>
             <section className="p-6 md:p-8">

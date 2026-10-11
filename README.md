@@ -50,7 +50,7 @@ cp .env.example .env.local      # optional in demo mode
 npm run dev                     # http://localhost:3000
 ```
 
-To try it, open `/login` and choose **Explore demo**. Each demo gets its own isolated sandbox: a member with 0.08 SOL payable and 0.02 SOL pending, five reward periods, a demo catalog, and past orders. Nothing in the demo can touch real funds or real accounts.
+The public "Explore demo" sign-in has been removed. The landing page still shows clearly labelled sample figures, and demo realms stay in the code for tests and local development only.
 
 | Command | What it does |
 | --- | --- |

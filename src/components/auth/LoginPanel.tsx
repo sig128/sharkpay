@@ -87,23 +87,10 @@ export function LoginPanel({
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"main" | "email" | "recovery">("main");
-  const [demoBusy, setDemoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recovery, setRecovery] = useState("");
   const [recBusy, setRecBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-
-  const startDemo = async () => {
-    setDemoBusy(true);
-    setError(null);
-    try {
-      const r = await callApi<{ redirect: string }>("/api/auth/demo", {});
-      router.push(r.redirect);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't start the demo");
-      setDemoBusy(false);
-    }
-  };
 
   if (mode === "recovery") {
     return (
@@ -225,12 +212,6 @@ export function LoginPanel({
           Sign in with an email code instead
         </button>
       )}
-
-      <Button variant="secondary" className="mt-6 w-full" onClick={startDemo} disabled={demoBusy}>
-        {demoBusy ? "Building sandbox…" : "Explore demo"}
-      </Button>
-      <p className="mt-3 text-xs text-muted">The demo is an isolated sandbox with sample data. Nothing in it is real or redeemable.</p>
-      {error && <p role="alert" className="mt-3 text-sm text-[#ffb3b3]">{error}</p>}
 
       <button type="button" onClick={() => setMode("recovery")} className="mt-6 min-h-11 text-sm text-muted underline hover:text-warm">
         Lost access? Use a recovery code
