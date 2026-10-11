@@ -19,7 +19,7 @@ const LOGOS: Record<ProviderId, (p: { className?: string }) => ReactNode> = {
   x: XLogo,
 };
 
-const ORDER: ProviderId[] = ["google", "x", "microsoft", "playstation", "steam"];
+const ORDER: ProviderId[] = ["google", "x", "microsoft", "steam", "playstation"];
 
 interface Tile {
   id: ProviderId;
