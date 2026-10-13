@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: "Link a Solana wallet (optional)",
-    body: "Sign a short message to prove it's yours. No transaction, no token approval, never a seed phrase. Rewards start from the next period.",
+    body: "Sign a short message to prove it's yours. No transaction, no token approval, never a seed phrase. It just shows that wallet's rewards in your account.",
   },
 ];
 

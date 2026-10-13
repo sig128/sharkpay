@@ -6,24 +6,30 @@ import { AppError } from "../errors";
  * Append-only, double-entry ledger of holder SOL rewards, in lamports. Every
  * transaction sums to zero. Balances are always derived from entries; nothing
  * is stored as a mutable balance. SQLite triggers reject UPDATE/DELETE on live
- * ledger rows. The ledger records SOL; it never moves it.
+ * ledger rows.
  *
  * Accounts
- *   external:settlement      SOL from settled fee proceeds (source of funding)
- *   pool:holder_rewards      funded but not yet allocated (carry-forward lives here)
- *   user:<id>:pending        allocated, waiting for the clearance window
- *   user:<id>:payable        earned and cleared, waiting for the operator payout
- *   external:paid_out        SOL the operator has sent, verified on-chain
+ *   external:fee_income      SOL creator fees that reached the fee wallet (source)
+ *   pool:holder_rewards      holder share not yet credited to a wallet (dust carries here)
+ *   holder:<wallet>          credited to a holder wallet, waiting for the next payout
+ *   ops:owed                 operations share waiting to be sent to OPS_WALLET
+ *   external:ops_kept        operations share left in the fee wallet (no OPS_WALLET)
+ *   external:paid_holders    SOL sent to holders, confirmed on-chain
+ *   external:paid_ops        SOL sent to OPS_WALLET, confirmed on-chain
+ *
+ * Liabilities (SOL the fee wallet must hold for others) = pool + holder:* + ops:owed.
  */
 export const acct = {
-  settlement: "external:settlement",
+  feeIncome: "external:fee_income",
   pool: "pool:holder_rewards",
-  paidOut: "external:paid_out",
-  pending: (userId: string) => `user:${userId}:pending`,
-  payable: (userId: string) => `user:${userId}:payable`,
+  holder: (wallet: string) => `holder:${wallet}`,
+  opsOwed: "ops:owed",
+  opsKept: "external:ops_kept",
+  paidHolders: "external:paid_holders",
+  paidOps: "external:paid_ops",
 };
 
-export type LedgerKind = "funding" | "allocation" | "clearance" | "payout";
+export type LedgerKind = "fee_income" | "accrual" | "payout";
 
 export interface PostInput {
   kind: LedgerKind;
@@ -35,7 +41,7 @@ export interface PostInput {
 }
 
 function mustStayNonNegative(account: string) {
-  return account.startsWith("user:") || account.startsWith("pool:");
+  return account.startsWith("holder:") || account.startsWith("pool:") || account.startsWith("ops:");
 }
 
 /** Posts a balanced transaction once. Re-posting the same idempotency key is a no-op. */
@@ -79,9 +85,7 @@ export function post(realm: string, input: PostInput, now = Date.now()): { txnId
     }
     for (const e of entries) {
       if (e.amount < 0 && mustStayNonNegative(e.account) && balance(realm, e.account) < 0) {
-        throw new AppError("insufficient_funds", `Insufficient balance in ${e.account.split(":").pop()}`, 409, {
-          account: e.account,
-        });
+        throw new AppError("insufficient_funds", `Insufficient balance in ${e.account}`, 409, { account: e.account });
       }
     }
     return { txnId, duplicate: false };
@@ -98,15 +102,13 @@ export function balance(realm: string, account: string): number {
   );
 }
 
-/** A member's SOL rewards in lamports. `paid` is what the operator has already sent. */
-export function userBalances(realm: string, userId: string) {
-  const paid =
-    one<{ p: number | null }>(`SELECT SUM(lamports) AS p FROM payouts WHERE realm = ? AND user_id = ?`, realm, userId)?.p ?? 0;
-  return {
-    pending: balance(realm, acct.pending(userId)),
-    payable: balance(realm, acct.payable(userId)),
-    paid,
-  };
+/** Wallets with an owed balance, largest first. */
+export function holderBalances(realm: string): Array<{ wallet: string; owed: number }> {
+  return all<{ account: string; b: number }>(
+    `SELECT account, SUM(amount) AS b FROM ledger_entries WHERE realm = ? AND account LIKE 'holder:%'
+     GROUP BY account HAVING b > 0 ORDER BY b DESC, account`,
+    realm,
+  ).map((r) => ({ wallet: r.account.slice("holder:".length), owed: r.b }));
 }
 
 /** Totals used for transparency and solvency checks. */
@@ -115,59 +117,21 @@ export function ledgerTotals(realm: string) {
     `SELECT account, SUM(amount) AS b FROM ledger_entries WHERE realm = ? GROUP BY account`,
     realm,
   );
-  let outstanding = 0;
-  let pending = 0;
-  let payable = 0;
+  let owed = 0;
   let pool = 0;
-  let paid = 0;
-  let funded = 0;
+  let opsOwed = 0;
+  let received = 0;
+  let paidHolders = 0;
+  let paidOps = 0;
+  let opsKept = 0;
   for (const r of rows) {
-    if (r.account.startsWith("user:")) {
-      outstanding += r.b;
-      if (r.account.endsWith(":pending")) pending += r.b;
-      if (r.account.endsWith(":payable")) payable += r.b;
-    } else if (r.account === acct.pool) pool = r.b;
-    else if (r.account === acct.paidOut) paid = r.b;
-    else if (r.account === acct.settlement) funded = -r.b;
+    if (r.account.startsWith("holder:")) owed += r.b;
+    else if (r.account === acct.pool) pool = r.b;
+    else if (r.account === acct.opsOwed) opsOwed = r.b;
+    else if (r.account === acct.feeIncome) received = -r.b;
+    else if (r.account === acct.paidHolders) paidHolders = r.b;
+    else if (r.account === acct.paidOps) paidOps = r.b;
+    else if (r.account === acct.opsKept) opsKept = r.b;
   }
-  return { funded, pool, outstanding, pending, payable, paid, backed: funded - paid >= outstanding + pool };
-}
-
-export interface LedgerLine {
-  txnId: string;
-  kind: LedgerKind;
-  refType: string | null;
-  refId: string | null;
-  memo: string | null;
-  createdAt: number;
-  account: string;
-  amount: number;
-}
-
-export function userLedger(realm: string, userId: string): LedgerLine[] {
-  return all<{
-    txn_id: string;
-    kind: LedgerKind;
-    ref_type: string | null;
-    ref_id: string | null;
-    memo: string | null;
-    created_at: number;
-    account: string;
-    amount: number;
-  }>(
-    `SELECT e.txn_id, t.kind, t.ref_type, t.ref_id, t.memo, t.created_at, e.account, e.amount
-     FROM ledger_entries e JOIN ledger_txns t ON t.id = e.txn_id
-     WHERE e.realm = ? AND e.account LIKE ? ORDER BY t.created_at DESC, e.id DESC`,
-    realm,
-    `user:${userId}:%`,
-  ).map((r) => ({
-    txnId: r.txn_id,
-    kind: r.kind,
-    refType: r.ref_type,
-    refId: r.ref_id,
-    memo: r.memo,
-    createdAt: r.created_at,
-    account: r.account,
-    amount: r.amount,
-  }));
+  return { received, pool, owed, opsOwed, opsKept, paidHolders, paidOps, liabilities: pool + owed + opsOwed };
 }

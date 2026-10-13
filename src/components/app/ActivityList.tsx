@@ -4,17 +4,17 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Dialog } from "radix-ui";
 import { clsx } from "clsx";
-import { ActivityRow, primaryDelta, type ActivityView } from "./ActivityRow";
+import { ActivityRow, type ActivityView } from "./ActivityRow";
 import { EmptyState } from "./Page";
 import { Badge } from "@/components/ui/Badges";
 import { buttonClass } from "@/components/ui/Button";
-import { fmtDate, fmtDateTime, fmtInt, fmtSol } from "@/lib/format";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 const FILTERS = [
   { id: "all", label: "All", match: () => true },
-  { id: "rewards", label: "Rewards", match: (a: ActivityView) => a.kind === "allocation" || a.kind === "clearance" },
-  { id: "redemptions", label: "Redemptions", match: (a: ActivityView) => a.kind === "reservation" || a.kind === "capture" },
-  { id: "reversals", label: "Reversals", match: (a: ActivityView) => a.kind === "release" || a.kind === "reversal" },
+  { id: "payouts", label: "SOL payouts", match: (a: ActivityView) => a.kind === "payout" },
+  { id: "orders", label: "Shark Cards", match: (a: ActivityView) => a.kind === "order" },
+  { id: "reversals", label: "Reversals", match: (a: ActivityView) => a.status === "reversed" },
   { id: "pending", label: "Pending", match: (a: ActivityView) => a.status === "pending" },
 ] as const;
 
@@ -96,7 +96,6 @@ export function ActivityList({ items }: { items: ActivityView[] }) {
 }
 
 function Drawer({ a }: { a: ActivityView }) {
-  const d = primaryDelta(a);
   return (
     <>
       <div className="flex items-start justify-between gap-4 border-b border-line p-5">
@@ -112,31 +111,16 @@ function Drawer({ a }: { a: ActivityView }) {
       </div>
       <div className="space-y-6 overflow-y-auto p-5">
         <div>
-          <div className={clsx("display text-5xl tabular-nums", d.value > 0 ? "text-mint" : "text-warm")}>
-            {d.value > 0 ? "+" : d.value < 0 ? "−" : ""}
-            {fmtSol(Math.abs(d.value))}
-            <span className="ml-2 font-mono text-base text-muted">{d.label}</span>
+          <div className={clsx("display text-5xl tabular-nums", a.positive ? "text-mint" : "text-warm")}>
+            {a.positive ? "+" : ""}
+            {a.amount}
+            <span className="ml-2 font-mono text-base text-muted">{a.amountLabel}</span>
           </div>
           <div className="mt-2">
             {a.status === "pending" ? <Badge tone="butter">Pending</Badge> : a.status === "reversed" ? <Badge>Reversed</Badge> : <Badge tone="mint">Completed</Badge>}
           </div>
         </div>
         <Dialog.Description className="text-sm leading-relaxed text-muted">{a.explanation}</Dialog.Description>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          {[
-            ["Payable", a.payableDelta],
-            ["Pending", a.pendingDelta],
-            ["Paid", a.paidDelta],
-          ].map(([k, v]) => (
-            <div key={k as string} className="rounded-xl border border-line p-3">
-              <div className="text-muted">{k}</div>
-              <div className="num mt-1 text-sm">
-                {(v as number) > 0 ? "+" : (v as number) < 0 ? "−" : ""}
-                {fmtInt(Math.abs(v as number))}
-              </div>
-            </div>
-          ))}
-        </div>
         {a.detail && (
           <dl className="divide-y divide-line rounded-2xl border border-line px-4 text-sm">
             {Object.entries(a.detail)
@@ -149,7 +133,11 @@ function Drawer({ a }: { a: ActivityView }) {
               ))}
           </dl>
         )}
-        <p className="font-mono text-[0.7rem] text-muted">Ledger transaction {a.id}</p>
+        {a.explorerUrl && (
+          <a href={a.explorerUrl} target="_blank" rel="noreferrer" className={buttonClass("secondary", "md", "w-full")}>
+            View on Solscan
+          </a>
+        )}
         {a.refType === "order" && a.refId && (
           <Link href={`/app/orders/${a.refId}`} className={buttonClass("secondary", "md", "w-full")}>
             View receipt

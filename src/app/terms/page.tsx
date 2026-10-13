@@ -39,8 +39,9 @@ export default function TermsPage() {
       <Section id="rewards" title="Rewards">
         <ul>
           <li>
-            Rewards come from a pool funded by fees that have actually been collected and settled. Eligible holders
-            receive a share of that pool in SOL. The pool, and your share, change every period and can be zero.
+            Rewards come from the pump.fun creator fees the fee wallet actually receives. A share of each payout run&apos;s
+            new SOL is split between holder wallets by average balance and sent automatically. The amount, and your share,
+            change with trading and can be zero.
           </li>
           <li>
             <strong>There is no guaranteed return, yield or profit.</strong> Nothing on the Service is investment,
@@ -49,8 +50,8 @@ export default function TermsPage() {
           <li>{brand.legal.rewards}</li>
           <li>
             Balances, prices and reward calculations are determined by our servers, not by what a browser or wallet
-            displays. The website never sends SOL; the operator pays rewards from the payout wallet and records each
-            transfer.
+            displays. Payouts are sent automatically from the fee wallet as ordinary Solana transfers, and each one is
+            recorded with its transaction signature.
           </li>
         </ul>
       </Section>

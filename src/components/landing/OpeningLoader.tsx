@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { brand } from "@/config/brand";
 
-const TIMEOUT_MS = 2400;
-const MIN_VISIBLE_MS = 450;
+const TIMEOUT_MS = 4000;
+const MIN_VISIBLE_MS = 2200;
 
 type Phase = "wait" | "expand" | "done";
 

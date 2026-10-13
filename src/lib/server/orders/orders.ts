@@ -2,7 +2,7 @@ import { all, one, run, tx } from "../db";
 import { decrypt, encrypt } from "../crypto";
 import { AppError, notFound } from "../errors";
 import { getItem, redemptionInstructions, type CatalogItem } from "../catalog/catalog";
-import { providerFor, type DemoScenario, type ProviderResult } from "../fulfillment/provider";
+import { providerFor, type ProviderResult } from "../fulfillment/provider";
 import type { Session } from "../auth/sessions";
 import { env } from "../env";
 import { formatUnits } from "../payments/units";
@@ -28,7 +28,6 @@ export interface OrderRow {
   provider_idempotency_key: string;
   code_ciphertext: string | null;
   failure_reason: string | null;
-  demo_scenario: DemoScenario | null;
   created_at: number;
   updated_at: number;
   completed_at: number | null;
@@ -60,7 +59,7 @@ function markRefundDue(orderId: string, note: string, now: number) {
 
 /** Sends a reserved order to its provider once and applies the outcome. */
 export async function submitOrder(order: OrderRow, now = Date.now()): Promise<OrderRow> {
-  const provider = providerFor(order.realm);
+  const provider = providerFor();
   let result: ProviderResult;
   if (!provider) {
     result = { status: "unknown", reason: "No fulfilment provider is connected" };
@@ -150,7 +149,7 @@ export function getOrder(session: Session, orderId: string): OrderRow {
 export async function reconcileOrder(session: Session, orderId: string) {
   const o = getOrder(session, orderId);
   if (o.status !== "pending_delivery" && o.status !== "needs_reconciliation") return o;
-  const provider = providerFor(o.realm);
+  const provider = providerFor();
   if (!provider) return o;
   try {
     applyProviderResult(o.id, await provider.status(o.provider_idempotency_key));
@@ -191,7 +190,6 @@ export function orderView(o: OrderRow) {
     `SELECT amount_gross, sol_price_lamports, tx_signature, status FROM shark_payments WHERE id = ?`,
     o.payment_id,
   );
-  const simulated = o.realm.startsWith("demo:");
   return {
     id: o.id,
     status: o.status,
@@ -199,16 +197,14 @@ export function orderView(o: OrderRow) {
       method: "shark" as const,
       amount: shark ? formatUnits(BigInt(shark.amount_gross), env().TOKEN_DECIMALS) : null,
       solPriceLamports: shark?.sol_price_lamports ?? null,
-      txSignature: simulated ? null : (shark?.tx_signature ?? null),
-      explorerUrl: !simulated && shark?.tx_signature ? `https://solscan.io/tx/${shark.tx_signature}` : null,
+      txSignature: shark?.tx_signature ?? null,
+      explorerUrl: shark?.tx_signature ? `https://solscan.io/tx/${shark.tx_signature}` : null,
       refundDue: shark?.status === "refund_due",
-      simulated,
     },
     provider: o.provider,
     providerRef: o.provider_ref,
     failureReason: o.failure_reason,
     hasCode: Boolean(o.code_ciphertext),
-    simulated: o.provider === "demo",
     createdAt: o.created_at,
     updatedAt: o.updated_at,
     completedAt: o.completed_at,
@@ -221,7 +217,6 @@ export function orderView(o: OrderRow) {
           region: item.region,
           gameVersion: item.game_version,
           sku: item.sku,
-          isDemo: Boolean(item.is_demo),
         }
       : null,
     instructions: item ? redemptionInstructions(item.platform) : [],

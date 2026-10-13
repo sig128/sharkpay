@@ -5,12 +5,14 @@ import { clsx } from "clsx";
 import { brand } from "@/config/brand";
 import { fmtSol } from "@/lib/format";
 import { Fin } from "./Fin";
+import type { Showcase } from "./placeholders";
 
 export interface MembershipCardProps {
-  memberName: string;
-  membershipId: string;
-  balance: number | null;
-  demo?: boolean;
+  memberName?: string;
+  membershipId?: string;
+  balance?: number | null;
+  /** Product card for visitors: holder rewards instead of a member's details. */
+  showcase?: Showcase;
   className?: string;
   /** Resting orientation in degrees. */
   pose?: { x: number; y: number; z: number };
@@ -27,8 +29,8 @@ const MAX_TILT = 6;
 export function MembershipCard({
   memberName,
   membershipId,
-  balance,
-  demo = true,
+  balance = null,
+  showcase,
   className,
   pose = { x: 8, y: -16, z: -5 },
   interactive = true,
@@ -55,7 +57,14 @@ export function MembershipCard({
       const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
       const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => set((0.5 - y) * 2 * MAX_TILT, (x - 0.5) * 2 * MAX_TILT, x * 100, y * 100));
+      frame = requestAnimationFrame(() =>
+        set(
+          (0.5 - y) * 2 * MAX_TILT,
+          (x - 0.5) * 2 * MAX_TILT,
+          x * 100,
+          y * 100,
+        ),
+      );
     };
     const onLeave = () => {
       cancelAnimationFrame(frame);
@@ -81,13 +90,20 @@ export function MembershipCard({
   } as CSSProperties;
 
   return (
-    <div ref={wrap} className={clsx("@container relative [perspective:1400px]", className)}>
+    <div
+      ref={wrap}
+      className={clsx("@container relative [perspective:1400px]", className)}
+    >
       <div
         ref={card}
         style={style}
         className="relative aspect-[1.586/1] w-full rounded-[var(--radius-card)] transition-transform duration-300 ease-out [transform-style:preserve-3d] [transform:rotateX(calc(var(--px)+var(--tx)))_rotateY(calc(var(--py)+var(--ty)))_rotateZ(var(--pz))] motion-reduce:transition-none"
         role="img"
-        aria-label={`${brand.name} rewards membership card for ${memberName}, membership ${membershipId}${balance !== null ? `, ${balance.toLocaleString("en-US")} lamports SOL rewards` : ""}${demo ? ", product preview" : ""}`}
+        aria-label={
+          showcase
+            ? `${brand.name} holder card: ${showcase.sharePct}% of creator fees paid to ${brand.ticker} holders in SOL every ${showcase.minutes} minutes`
+            : `${brand.name} rewards membership card for ${memberName}, membership ${membershipId}${balance !== null ? `, ${balance.toLocaleString("en-US")} lamports SOL owed` : ""}`
+        }
       >
         {/* body */}
         <div
@@ -100,10 +116,24 @@ export function MembershipCard({
           }}
         >
           {/* guilloché microlines */}
-          <svg className="absolute inset-0 h-full w-full opacity-[0.16] mix-blend-overlay" aria-hidden="true">
+          <svg
+            className="absolute inset-0 h-full w-full opacity-[0.16] mix-blend-overlay"
+            aria-hidden="true"
+          >
             <defs>
-              <pattern id="guil" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
-                <path d="M0 11 Q5.5 0 11 11 T22 11" fill="none" stroke="white" strokeWidth="0.6" />
+              <pattern
+                id="guil"
+                width="22"
+                height="22"
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(28)"
+              >
+                <path
+                  d="M0 11 Q5.5 0 11 11 T22 11"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="0.6"
+                />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#guil)" />
@@ -111,11 +141,17 @@ export function MembershipCard({
           {/* pointer-follow sheen */}
           <div
             className="absolute inset-0"
-            style={{ background: "radial-gradient(60% 70% at var(--mx) var(--my), rgb(255 255 255 / 0.32), transparent 60%)" }}
+            style={{
+              background:
+                "radial-gradient(60% 70% at var(--mx) var(--my), rgb(255 255 255 / 0.32), transparent 60%)",
+            }}
           />
           {/* slow specular sweep */}
           <div className="pointer-events-none absolute inset-y-[-40%] left-0 w-1/3 bg-gradient-to-r from-transparent via-white/35 to-transparent blur-md [animation:specular_9s_ease-in-out_infinite] motion-reduce:hidden" />
-          <Fin tone="ink" className="absolute -right-[6%] -bottom-[14%] h-[95%] w-auto opacity-[0.1]" />
+          <Fin
+            tone="ink"
+            className="absolute -right-[6%] -bottom-[14%] h-[95%] w-auto opacity-[0.1]"
+          />
           {/* edge light */}
           <div className="absolute inset-0 rounded-[inherit] [background:linear-gradient(180deg,rgb(255_255_255/0.35),transparent_22%,transparent_80%,rgb(255_255_255/0.12))] mix-blend-soft-light" />
         </div>
@@ -128,40 +164,82 @@ export function MembershipCard({
               {brand.name}
             </div>
             <div className="text-right font-mono text-[max(0.42rem,2.3cqw)] uppercase leading-tight tracking-[0.18em] opacity-80">
-              Rewards
+              {showcase ? "Holder" : "Member"}
               <br />
-              membership
+              card
             </div>
           </div>
 
-          <div>
-            <div className="font-mono text-[max(0.42rem,2.2cqw)] uppercase tracking-[0.2em] opacity-75">
-              {demo ? "Illustrative SOL rewards" : "SOL rewards"}
-            </div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="font-display text-[max(1.4rem,12.5cqw)] font-extrabold leading-none tabular-nums">
-                {balance === null ? "—" : fmtSol(balance, { unit: false })}
-              </span>
-              <span className="font-mono text-[max(0.45rem,2.6cqw)] font-medium tracking-[0.12em]">SOL</span>
-            </div>
-          </div>
+          {showcase ? (
+            <>
+              <div>
+                <div className="font-mono text-[max(0.42rem,2.2cqw)] uppercase tracking-[0.2em] opacity-75">
+                  Holder rewards
+                </div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="font-display text-[max(1.4rem,12.5cqw)] font-extrabold leading-none tabular-nums">
+                    {showcase.sharePct}%
+                  </span>
+                  <span className="font-mono text-[max(0.45rem,2.6cqw)] font-medium uppercase tracking-[0.12em]">
+                    of creator fees
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-mono text-[max(0.4rem,2cqw)] uppercase tracking-[0.2em] opacity-70">
+                    Paid in SOL
+                  </div>
+                  <div className="truncate text-[max(0.6rem,3.6cqw)] font-bold">
+                    Every {showcase.minutes} minutes
+                  </div>
+                  <div className="mt-0.5 font-mono text-[max(0.42rem,2.4cqw)] tracking-[0.12em] opacity-80">
+                    {showcase.site}
+                  </div>
+                </div>
+                <div className="shrink-0 rounded-full border border-ink/30 bg-white/20 px-[0.9em] py-[0.35em] font-mono text-[max(0.45rem,2.4cqw)] font-semibold tracking-[0.12em]">
+                  {brand.ticker}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="font-mono text-[max(0.42rem,2.2cqw)] uppercase tracking-[0.2em] opacity-75">
+                  SOL owed
+                </div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="font-display text-[max(1.4rem,12.5cqw)] font-extrabold leading-none tabular-nums">
+                    {balance === null ? "—" : fmtSol(balance, { unit: false })}
+                  </span>
+                  <span className="font-mono text-[max(0.45rem,2.6cqw)] font-medium tracking-[0.12em]">
+                    SOL
+                  </span>
+                </div>
+              </div>
 
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-mono text-[max(0.4rem,2cqw)] uppercase tracking-[0.2em] opacity-70">Member</div>
-              <div className="truncate text-[max(0.6rem,3.6cqw)] font-bold">{memberName}</div>
-              <div className="mt-0.5 font-mono text-[max(0.42rem,2.4cqw)] tracking-[0.12em] opacity-80">{membershipId}</div>
-            </div>
-            {demo && (
-              <span className="shrink-0 rounded-full border border-ink/25 bg-white/25 px-2 py-0.5 font-mono text-[max(0.38rem,1.9cqw)] uppercase tracking-[0.16em]">
-                Product preview
-              </span>
-            )}
-          </div>
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-mono text-[max(0.4rem,2cqw)] uppercase tracking-[0.2em] opacity-70">
+                    Member
+                  </div>
+                  <div className="truncate text-[max(0.6rem,3.6cqw)] font-bold">
+                    {memberName}
+                  </div>
+                  <div className="mt-0.5 font-mono text-[max(0.42rem,2.4cqw)] tracking-[0.12em] opacity-80">
+                    {membershipId}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
       {priority === "hero" && (
-        <div aria-hidden="true" className="absolute inset-x-[12%] -bottom-[14%] h-[18%] rounded-[50%] bg-pink/30 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-[12%] -bottom-[14%] h-[18%] rounded-[50%] bg-pink/30 blur-3xl"
+        />
       )}
     </div>
   );

@@ -24,7 +24,6 @@ export interface RewardItem {
   region: string;
   stock: number | null;
   status: string;
-  isDemo: boolean;
 }
 
 type Step = "details" | "shark";
@@ -36,13 +35,11 @@ export interface SharkAvailability {
 
 export function RedeemDialog({
   item,
-  demo,
   userPlatform,
   shark,
   onClose,
 }: {
   item: RewardItem | null;
-  demo: boolean;
   userPlatform: string;
   shark: SharkAvailability;
   onClose: () => void;
@@ -71,7 +68,6 @@ export function RedeemDialog({
               <Dialog.Title className="display text-3xl">{item.name}</Dialog.Title>
               <p className="mt-2 text-sm text-muted">
                 {fmtSol(item.solPriceLamports)}, paid in {brand.ticker}
-                {demo ? " · demo catalog" : ""}
               </p>
             </div>
             <Dialog.Close className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-white/5 hover:text-warm" aria-label="Close">

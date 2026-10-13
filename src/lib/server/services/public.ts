@@ -1,56 +1,30 @@
-import { one } from "../db";
-import { publicSampleRealm, DEMO_FIXTURE } from "../simulation/demo";
-import { overview, transparency } from "./dashboard";
-import { passModel } from "../passes/pass";
-import { DEMO_TIERS } from "../catalog/catalog";
-import type { Session } from "../auth/sessions";
+import { CARD_TIERS } from "../catalog/catalog";
+import { payoutStatus } from "../rewards/status";
+import { payoutView } from "./dashboard";
+import { env } from "../env";
+import { showcaseFrom } from "@/components/brand/placeholders";
 
-/** Everything the public landing page shows, all from the sample realm. */
-export async function landingSample() {
-  const realm = await publicSampleRealm();
-  const member = one<{ id: string }>(
-    `SELECT id FROM users WHERE realm = ? AND display_name = ? ORDER BY created_at LIMIT 1`,
-    realm,
-    DEMO_FIXTURE.displayName,
-  )!;
-  const session: Session = {
-    idHash: "public",
-    userId: member.id,
-    realm,
-    kind: "demo",
-    authProvider: "demo",
-    authAt: 0,
-    expiresAt: 0,
-  };
-  const o = overview(session);
-  const pass = passModel(realm, member.id);
-  const t = transparency(realm);
+/** Everything the public landing page shows: the price list and the live payout status. */
+export function landing() {
+  const s = payoutStatus({ cycles: 1, payouts: 5 });
   return {
-    hero: {
-      memberName: o.user.displayName,
-      membershipId: o.user.membershipId,
-      available: o.balances.payable,
-      pending: o.balances.pending,
-      paid: o.balances.paid,
-      holdings: o.holdings.tokens,
-      selectedName: o.selectedReward?.name ?? "Bull Shark Card",
-      selectedCost: o.selectedReward?.solPriceLamports ?? DEMO_FIXTURE.selectedCost,
-      pass,
+    payouts: {
+      live: s.live,
+      blocker: s.blocker,
+      intervalMinutes: s.intervalMinutes,
+      holderShareBps: s.holderShareBps,
+      tradeFeeBps: s.tradeFeeBps,
+      minPayoutLamports: s.minPayoutLamports,
+      lastCycleAt: s.lastCycleAt,
+      nextCycleAt: s.nextCycleAt,
+      holdersNow: s.holdersNow,
+      totals: s.totals,
+      recentPayouts: s.recentPayouts.map(payoutView),
     },
-    steps: {
-      budget: o.latestPeriod?.budget ?? 0,
-      share: o.latestWeight?.share ?? 0,
-      allocation: o.latestPeriod?.myAllocation ?? 0,
-      holderShareBps: t.config.holderShareBps,
-      periodDays: t.config.periodDays,
-    },
-    tiers: DEMO_TIERS.map((d) => ({
-      tier: d.tier,
-      name: d.name,
-      gta: d.gta,
-      cost: d.lamports,
-      outOfStockOn: d.tier === "megalodon" ? ["xbox"] : [],
-    })),
-    transparency: t,
+    showcase: showcaseFrom({ holderShareBps: s.holderShareBps, intervalMinutes: s.intervalMinutes, appUrl: env().APP_URL }),
+    tiers: CARD_TIERS.map((t) => ({ tier: t.tier, name: t.name, gta: t.gta, cost: t.lamports })),
   };
 }
+
+export type Landing = ReturnType<typeof landing>;
+export type LandingPayouts = Landing["payouts"];

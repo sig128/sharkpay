@@ -97,11 +97,6 @@ export function OrderStatus({ initial, compact = false, onChange }: { initial: O
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                {order.simulated && (
-                  <p className="mt-3 text-sm text-butter">
-                    Demo code. It is intentionally invalid and can&apos;t be redeemed anywhere.
-                  </p>
-                )}
               </div>
             ) : (
               <div className="mt-3">

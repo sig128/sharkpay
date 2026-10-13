@@ -1,47 +1,44 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { env } from "@/lib/server/env";
 import { safeEqual, sha256 } from "@/lib/server/crypto";
 import { errorResponse } from "@/lib/server/http";
-import { payoutsDue, recordPayout } from "@/lib/server/rewards/payouts";
+import { payoutBlocker, runPayoutCycle } from "@/lib/server/rewards/autopay";
+import { holderBalances } from "@/lib/server/ledger/ledger";
+import { payoutStatus } from "@/lib/server/rewards/status";
+import { liveChain } from "@/lib/server/solana/chain";
 
 /**
- * Operator-only. GET lists what members are owed; POST records a SOL payout the
- * operator already sent from the payout wallet. This endpoint never sends SOL.
- * Disabled (404) unless PAYOUT_RECORDER_SECRET is set.
+ * Operator-only. GET shows payout status and who is owed; POST runs a payout
+ * cycle now instead of waiting for the timer. Disabled (404) unless
+ * OPERATOR_SECRET is set.
  */
-function authorized(req: Request) {
-  const secret = env().PAYOUT_RECORDER_SECRET;
-  if (!secret) return null;
+function gate(req: Request) {
+  const secret = env().OPERATOR_SECRET;
+  if (!secret) return NextResponse.json({ error: { code: "not_configured" } }, { status: 404 });
   const header = req.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return safeEqual(sha256(token), sha256(secret));
-}
-
-const payout = z.object({
-  wallet: z.string().min(32).max(44),
-  lamports: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  signature: z.string().min(64).max(90),
-});
-
-function gate(req: Request) {
-  const ok = authorized(req);
-  if (ok === null) return NextResponse.json({ error: { code: "not_configured" } }, { status: 404 });
-  if (!ok) return NextResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
+  if (!safeEqual(sha256(token), sha256(secret))) {
+    return NextResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
+  }
   return null;
 }
 
 export async function GET(req: Request) {
   const denied = gate(req);
   if (denied) return denied;
-  return NextResponse.json({ due: payoutsDue() }, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(
+    { status: payoutStatus({ cycles: 20, payouts: 50 }), owed: holderBalances("live").slice(0, 200) },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function POST(req: Request) {
   const denied = gate(req);
   if (denied) return denied;
+  const blocker = payoutBlocker();
+  if (blocker) return NextResponse.json({ error: { code: "not_configured", message: blocker } }, { status: 409 });
   try {
-    return NextResponse.json({ payout: await recordPayout(payout.parse(await req.json())) });
+    return NextResponse.json({ cycle: await runPayoutCycle(liveChain()) });
   } catch (err) {
     return errorResponse(err);
   }

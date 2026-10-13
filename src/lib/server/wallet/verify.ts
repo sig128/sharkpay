@@ -19,7 +19,6 @@ export function isSolanaAddress(address: string) {
 }
 
 function requireWalletAuth(session: Session, now: number) {
-  if (session.kind === "demo") return;
   if (!isRecentlyAuthenticated(session, now)) {
     throw new AppError("reauth_required", "Confirm it's you by signing in again before changing wallets", 403);
   }
@@ -41,7 +40,7 @@ export function createWalletChallenge(session: Session, address: string, now = D
   const message = [
     `${appUrl.host} wants you to link a Solana wallet to your ${brand.name} account.`,
     "",
-    "This proves you control the wallet so holder rewards can be credited to you.",
+    "This proves you control the wallet so its holder rewards can be shown on your account.",
     "It does not approve any transaction, transfer or token spending.",
     "",
     `Wallet: ${address}`,
@@ -117,7 +116,7 @@ export function verifyWalletChallenge(
     }
     if (active) return { address: ch.address, alreadyLinked: true };
 
-    const cooldownMs = env().PERIOD_LENGTH_DAYS * 24 * 3600 * 1000;
+    const cooldownMs = 7 * 24 * 3600 * 1000;
     const recent = one<{ user_id: string }>(
       `SELECT user_id FROM wallets WHERE realm = ? AND address = ? AND unlinked_at > ? AND user_id != ?
        ORDER BY unlinked_at DESC LIMIT 1`,
@@ -129,7 +128,7 @@ export function verifyWalletChallenge(
     if (recent) {
       throw new AppError(
         "wallet_cooldown",
-        "This wallet was recently linked to another member. It can be linked again after one full reward period.",
+        "This wallet was recently linked to another member. It can be linked again after 7 days.",
         409,
       );
     }

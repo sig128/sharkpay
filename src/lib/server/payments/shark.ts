@@ -17,11 +17,6 @@ import type { Session } from "../auth/sessions";
 export { formatUnits, solanaRpc };
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
-const DEMO_MINT = "7nE9GvcwsqzYxmJLSrYmSB1V1YoJWVK1KWzAcWAzjXkN";
-const DEMO_TREASURY = "5f1oiop1b3Bxw8ppwbAECAVXq118mHGCVLEsp4EFPSxb";
-const DEMO_SOL_USD = 150;
-const DEMO_TOKEN_USD = 0.0042;
-
 /** Payments that arrive this long after the quote expired are still honoured. */
 const LATE_GRACE_MS = 60_000;
 const PRICE_CACHE_MS = 15_000;
@@ -46,7 +41,6 @@ export interface SharkPaymentRow {
   payer: string | null;
   received: string | null;
   order_id: string | null;
-  demo_scenario: string | null;
   note: string | null;
   created_at: number;
   expires_at: number;
@@ -56,19 +50,16 @@ export interface SharkPaymentRow {
 
 export type CheckoutAvailability =
   | { enabled: true; mint: string; treasury: string }
-  | { enabled: false; code: "live_only" | "not_live" | "not_configured" | "fulfillment_unavailable"; reason: string };
+  | { enabled: false; code: "not_live" | "not_configured" | "fulfillment_unavailable"; reason: string };
 
 /** Whether $SHARK checkout can take a payment right now. Fails closed on every missing piece. */
-export function sharkCheckout(realm: string): CheckoutAvailability {
-  if (realm.startsWith("demo:")) {
-    return { enabled: true, mint: DEMO_MINT, treasury: DEMO_TREASURY };
-  }
+export function sharkCheckout(): CheckoutAvailability {
   const e = env();
   const mint = validMint(e.TOKEN_MINT);
   if (!mint) return { enabled: false, code: "not_live", reason: "$SHARK isn't live yet." };
   const treasury = validAddress(e.SHARK_TREASURY_WALLET);
   if (!treasury) return { enabled: false, code: "not_configured", reason: "$SHARK payments aren't set up yet." };
-  if (!providerFor(realm)) {
+  if (!providerFor()) {
     return {
       enabled: false,
       code: "fulfillment_unavailable",
@@ -100,9 +91,8 @@ function readPrice(body: unknown, mint: string, needLiquidity: boolean) {
   return usd;
 }
 
-/** SOL and $SHARK USD prices from Jupiter. Demo uses fixed sample prices. */
+/** SOL and $SHARK USD prices from Jupiter. */
 export async function marketPrices(mint: string, fetchImpl: typeof fetch = fetch, now = Date.now()): Promise<MarketPrices> {
-  if (mint === DEMO_MINT) return { solUsd: DEMO_SOL_USD, tokenUsd: DEMO_TOKEN_USD };
   if (priceCache && priceCache.mint === mint && now - priceCache.at < PRICE_CACHE_MS) return priceCache.prices;
   const e = env();
   let body: unknown;
@@ -161,7 +151,7 @@ export function grossForNet(net: bigint, feeBps: number): bigint {
 // ---- Quote ---------------------------------------------------------------------
 
 export async function createSharkQuote(session: Session, itemId: string, fetchImpl: typeof fetch = fetch, now = Date.now()) {
-  const status = sharkCheckout(session.realm);
+  const status = sharkCheckout();
   if (!status.enabled) throw new AppError(status.code, status.reason, 503);
   const item = availableItem(session.realm, itemId);
   if (!item.sol_price_lamports || item.sol_price_lamports <= 0) {
@@ -170,7 +160,7 @@ export async function createSharkQuote(session: Session, itemId: string, fetchIm
   const e = env();
   const market = await marketPrices(status.mint, fetchImpl, now);
   const net = tokensForSol(item.sol_price_lamports, market.solUsd, market.tokenUsd, e.TOKEN_DECIMALS);
-  const gross = grossForNet(net, e.REWARD_FEE_BPS);
+  const gross = grossForNet(net, e.TOKEN_TRANSFER_FEE_BPS);
   const reference = bs58.encode(randomBytes(32));
   const id = randomId("spay");
   const expiresAt = now + e.SHARK_QUOTE_TTL_SECONDS * 1000;
@@ -335,37 +325,6 @@ export async function checkSharkPayment(session: Session, paymentId: string, rpc
   return { payment: paymentView(p), order: orderFor(p) };
 }
 
-/** Demo-only: pretends the quoted $SHARK arrived so the catalog flow can be tried. */
-export async function simulateDemoPayment(
-  session: Session,
-  paymentId: string,
-  demoScenario: "instant" | "pending" | "fail" | "uncertain" | undefined,
-  now = Date.now(),
-) {
-  if (!session.realm.startsWith("demo:")) {
-    throw new AppError("forbidden", "Simulated payments are only available in the demo.", 403);
-  }
-  let p = getSharkPayment(session, paymentId);
-  if (p.status !== "awaiting_payment" && p.status !== "expired") return { payment: paymentView(p), order: orderFor(p) };
-  if (demoScenario) {
-    run(`UPDATE shark_payments SET demo_scenario = ?, updated_at = ? WHERE id = ?`, demoScenario, now, p.id);
-    p = getSharkPayment(session, paymentId);
-  }
-  const settled = settle(
-    p,
-    bs58.encode(randomBytes(64)),
-    { received: BigInt(p.amount_net), payer: "demo-payer", blockTimeMs: now },
-    now,
-  );
-  p = settled ?? getSharkPayment(session, paymentId);
-  if (p.status === "paid" && p.order_id) {
-    const order = one<OrderRow>(`SELECT * FROM orders WHERE id = ?`, p.order_id)!;
-    if (order.status === "reserved") await submitOrder(order, now);
-    p = getSharkPayment(session, paymentId);
-  }
-  return { payment: paymentView(p), order: orderFor(p) };
-}
-
 export async function estimateSharkAmount(lamports: number, mint: string | null, fetchImpl: typeof fetch = fetch) {
   if (!mint || lamports <= 0) return null;
   try {
@@ -415,7 +374,7 @@ function settle(
     if (paidAt > p.expires_at + LATE_GRACE_MS) {
       return record("refund_due", "Payment arrived after the quote expired. It will be refunded to the sending wallet.");
     }
-    const provider = providerFor(p.realm);
+    const provider = providerFor();
     let item;
     try {
       item = availableItem(p.realm, p.item_id);
@@ -429,8 +388,8 @@ function settle(
     const orderId = randomId("ord");
     run(
       `INSERT INTO orders (id, realm, user_id, item_id, payment_id, status, provider,
-        provider_idempotency_key, demo_scenario, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)`,
+        provider_idempotency_key, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'reserved', ?, ?, ?, ?)`,
       orderId,
       p.realm,
       p.user_id,
@@ -438,7 +397,6 @@ function settle(
       p.id,
       provider.id,
       `pik_${orderId}`,
-      p.demo_scenario,
       now,
       now,
     );

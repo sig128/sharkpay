@@ -206,7 +206,7 @@ export function RecoveryCodes({ remaining, total, canGenerate }: { remaining: nu
   );
 }
 
-export function SignOutEverywhere({ demo }: { demo: boolean }) {
+export function SignOutEverywhere() {
   const [busy, setBusy] = useState<null | "here" | "all">(null);
   const out = async (everywhere: boolean) => {
     setBusy(everywhere ? "all" : "here");
@@ -216,13 +216,11 @@ export function SignOutEverywhere({ demo }: { demo: boolean }) {
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="secondary" onClick={() => out(false)} disabled={busy !== null}>
-        {busy === "here" ? "Signing out…" : demo ? "End demo" : "Sign out"}
+        {busy === "here" ? "Signing out…" : "Sign out"}
       </Button>
-      {!demo && (
-        <Button variant="danger" onClick={() => out(true)} disabled={busy !== null}>
-          {busy === "all" ? "Signing out…" : "Sign out everywhere"}
-        </Button>
-      )}
+      <Button variant="danger" onClick={() => out(true)} disabled={busy !== null}>
+        {busy === "all" ? "Signing out…" : "Sign out everywhere"}
+      </Button>
     </div>
   );
 }

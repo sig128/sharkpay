@@ -6,9 +6,9 @@ import { all, one, run } from "../db";
 import { hmac, randomToken, safeEqual, sha256 } from "../crypto";
 import { env, integrations, sessionSecret } from "../env";
 import { AppError } from "../errors";
-import { userBalances } from "../ledger/ledger";
+import { acct } from "../ledger/ledger";
 import { fmtSol } from "@/lib/format";
-import { listWallets } from "../wallet/verify";
+import { linkedWalletAddresses, memberRewards, snapshotHoldings } from "../rewards/member";
 import { getUser } from "../auth/accounts";
 
 /**
@@ -29,18 +29,19 @@ export function maskMembershipId(id: string) {
   return `SC-••••-••••-${id.slice(-4)}`;
 }
 
-function holdingsLabel(raw: bigint) {
-  const d = env().TOKEN_DECIMALS;
-  const n = Number(raw / 10n ** BigInt(d)) + Number(raw % 10n ** BigInt(d)) / 10 ** d;
-  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+function holdingsLabel(tokens: number) {
+  return tokens.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** Latest ledger change on any of the member's linked wallets. */
 function lastBalanceChange(realm: string, userId: string) {
+  const accounts = linkedWalletAddresses(userId).map(acct.holder);
+  if (accounts.length === 0) return 0;
   return (
     one<{ t: number | null }>(
-      `SELECT MAX(created_at) AS t FROM ledger_entries WHERE realm = ? AND account LIKE ?`,
+      `SELECT MAX(created_at) AS t FROM ledger_entries WHERE realm = ? AND account IN (${accounts.map(() => "?").join(",")})`,
       realm,
-      `user:${userId}:%`,
+      ...accounts,
     )?.t ?? 0
   );
 }
@@ -63,17 +64,8 @@ export interface PassModel {
 export function passModel(realm: string, userId: string): PassModel {
   const user = getUser(userId);
   if (!user) throw new AppError("not_found", "Member not found", 404);
-  const b = userBalances(realm, userId);
-  const wallets = listWallets(userId).map((w) => w.address);
-  const holdings = wallets.length
-    ? all<{ balance_raw: string }>(
-        `SELECT h.balance_raw FROM holding_events h
-         WHERE h.realm = ? AND h.owner IN (${wallets.map(() => "?").join(",")})
-           AND h.block_time = (SELECT MAX(block_time) FROM holding_events x WHERE x.realm = h.realm AND x.token_account = h.token_account)`,
-        realm,
-        ...wallets,
-      ).reduce((s, r) => s + BigInt(r.balance_raw), 0n)
-    : 0n;
+  const rewards = memberRewards(userId, 1);
+  const holdings = snapshotHoldings(linkedWalletAddresses(userId)).tokens;
   const mid = membershipId(userId);
   const updatedAt = lastBalanceChange(realm, userId) || user.created_at;
   const platform = { pc: "PC", playstation: "PlayStation", xbox: "Xbox" }[user.reward_platform ?? ""] ?? "Not set";
@@ -87,7 +79,7 @@ export function passModel(realm: string, userId: string): PassModel {
     primary: { label: `${brand.ticker} HOLDINGS`, value: holdingsLabel(holdings) },
     secondary: [
       { label: "MEMBER", value: user.display_name },
-      { label: "SOL REWARDS", value: fmtSol(b.payable + b.pending) },
+      { label: "SOL OWED", value: fmtSol(rewards.owed) },
     ],
     auxiliary: [
       { label: "MEMBERSHIP", value: maskMembershipId(mid) },
@@ -95,6 +87,7 @@ export function passModel(realm: string, userId: string): PassModel {
     ],
     back: [
       { label: "Redeem", value: `Open ${env().APP_URL}/app/rewards and sign in to redeem. This pass cannot be used to pay or redeem.` },
+      { label: "SOL paid to your wallets", value: fmtSol(rewards.paid) },
       { label: "About rewards", value: brand.legal.rewards },
       { label: "Not a payment card", value: "This pass shows membership information only. It is not an Apple Pay card and holds no money." },
       { label: "Last updated", value: new Date(updatedAt).toISOString() },

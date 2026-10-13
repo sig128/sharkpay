@@ -6,6 +6,7 @@ import { Palm } from "@/components/brand/Atmosphere";
 import { XLink } from "@/components/brand/XLink";
 import { ButtonLink } from "@/components/ui/Button";
 import { env } from "@/lib/server/env";
+import { payoutBlocker } from "@/lib/server/rewards/autopay";
 import { faqItems } from "./faq-items";
 
 type FooterLink = { href: string; label: string; note?: string };
@@ -14,6 +15,7 @@ const columns: { title: string; links: FooterLink[] }[] = [
   {
     title: "Product",
     links: [
+      { href: "/docs", label: "Docs" },
       { href: "/#how-it-works", label: "How it works" },
       { href: "/#buy", label: `Buy ${brand.ticker}` },
       { href: "/#rewards", label: "Shark Card rewards" },
@@ -50,7 +52,7 @@ const columns: { title: string; links: FooterLink[] }[] = [
 const promises = [
   { title: "No passwords, ever", body: "We never ask for Rockstar, Xbox, PlayStation or Steam passwords." },
   { title: "No seed phrases", body: "Linking a wallet is a one-time signature. It can't move tokens." },
-  { title: "No promised yield", body: "Rewards come from settled fees, vary each period and can be zero." },
+  { title: "No promised yield", body: "Rewards come from real creator fees, vary with trading and can be zero." },
 ];
 
 function StructuredData({ url }: { url: string }) {
@@ -96,6 +98,7 @@ function StructuredData({ url }: { url: string }) {
 export function Footer() {
   const url = env().APP_URL.replace(/\/$/, "");
   const year = new Date().getFullYear();
+  const payoutsLive = payoutBlocker() === null;
 
   return (
     <footer className="site-footer relative isolate overflow-hidden border-t border-line" aria-labelledby="footer-heading">
@@ -110,14 +113,14 @@ export function Footer() {
           <div aria-hidden="true" className="footer-cta-glow pointer-events-none absolute -right-24 -top-24 size-[420px] rounded-full" />
           <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="eyebrow">Product preview</p>
+              <p className="eyebrow">Get started</p>
               <p className="display mt-4 text-[clamp(2.75rem,6.5vw,5.25rem)]">
                 Your next upgrade
                 <br />
                 <span className="text-sunset-flow-soft">starts here.</span>
               </p>
               <p className="mt-4 max-w-md text-muted">
-                Link a wallet, collect funded SOL rewards and pay {brand.ticker} for GTA Online Shark Cards on your platform.
+                Hold {brand.ticker} to receive SOL from creator fees, and pay {brand.ticker} for GTA Online Shark Cards on your platform.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -139,10 +142,10 @@ export function Footer() {
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">{brand.tagline}</p>
           <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted">
             <span className="relative flex size-2">
-              <span className="absolute inset-0 animate-ping rounded-full bg-butter/60 motion-reduce:animate-none" />
-              <span className="relative size-2 rounded-full bg-butter" />
+              <span className={`absolute inset-0 animate-ping rounded-full motion-reduce:animate-none ${payoutsLive ? "bg-mint/60" : "bg-butter/60"}`} />
+              <span className={`relative size-2 rounded-full ${payoutsLive ? "bg-mint" : "bg-butter"}`} />
             </span>
-            Preview build · simulated data
+            {payoutsLive ? "Automatic payouts live" : "Pre-launch · payouts not live yet"}
           </p>
           <div className="mt-6 flex items-center gap-3">
             <XLink label />
@@ -217,7 +220,6 @@ export function Footer() {
             <p className="text-sm font-medium text-warm/90">{brand.legal.independence}</p>
             <p>{brand.legal.rewards}</p>
             <p>{brand.legal.trademarks}</p>
-            <p>Figures marked as sample or product preview are illustrative and are not live data.</p>
           </div>
           <div className="flex flex-col items-start justify-between gap-6 md:col-span-4 md:items-end">
             <div className="flex items-center gap-2">
@@ -230,6 +232,9 @@ export function Footer() {
               </a>
             </div>
             <nav aria-label="Legal" className="flex gap-5 text-sm">
+              <Link href="/docs" className="inline-flex min-h-11 items-center text-warm/90 underline-offset-4 hover:underline">
+                Docs
+              </Link>
               <Link href="/terms" className="inline-flex min-h-11 items-center text-warm/90 underline-offset-4 hover:underline">
                 Terms of Service
               </Link>

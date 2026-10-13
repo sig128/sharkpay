@@ -7,15 +7,14 @@ import { Badge } from "@/components/ui/Badges";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/app/Page";
 import { RedeemDialog, type RewardItem, type SharkAvailability } from "./RedeemDialog";
+import { CARD_TIERS } from "@/config/tiers";
 import { callApi } from "@/lib/client";
 import { fmtGta, fmtSol, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
 
 interface Props {
   items: RewardItem[];
-  available: number;
   defaults: { platform: string; region: string };
   selectedTier: string | null;
-  demo: boolean;
   fulfillmentConnected: boolean;
   shark: SharkAvailability;
 }
@@ -44,7 +43,7 @@ function Select({ label, value, onChange, options }: { label: string; value: str
   );
 }
 
-export function RewardsBrowser({ items, available, defaults, selectedTier, demo, fulfillmentConnected, shark }: Props) {
+export function RewardsBrowser({ items, defaults, selectedTier, fulfillmentConnected, shark }: Props) {
   const router = useRouter();
   const [platform, setPlatform] = useState(defaults.platform);
   const [region, setRegion] = useState(defaults.region);
@@ -100,13 +99,8 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between text-sm">
-        <span className="hidden text-muted md:inline" aria-live="polite">
-          {futureOnly ? "0 items" : `${filtered.length} item${filtered.length === 1 ? "" : "s"}`}
-        </span>
-        <span className="num">
-          <span className="text-muted">SOL rewards ready:</span> {fmtSol(available)}
-        </span>
+      <div className="mb-4 hidden text-sm text-muted md:block" aria-live="polite">
+        {futureOnly ? "0 items" : `${filtered.length} item${filtered.length === 1 ? "" : "s"}`}
       </div>
 
       {futureOnly ? (
@@ -115,10 +109,44 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
           unavailable until compatibility and fulfilment are verified.
         </EmptyState>
       ) : !fulfillmentConnected || items.length === 0 ? (
-        <EmptyState title="No live rewards yet">
-          Live redemption opens once a licensed fulfilment provider is connected and its catalog is verified. Only verified
-          live products are ever shown as available. You can explore the full flow in the demo.
-        </EmptyState>
+        <>
+          <p className="mb-4 rounded-2xl border border-line bg-white/[0.03] p-4 text-sm text-muted">
+            Ordering opens once a licensed fulfilment provider is connected and its catalog is verified. Until then this is
+            the price list; nothing can be bought yet. You can still pick a goal.
+          </p>
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {CARD_TIERS.map((t) => (
+              <li key={t.tier} className="panel flex flex-col p-3">
+                <TierArt tier={t.tier} className="aspect-[2/1]" label={t.name.replace(" Card", "")} />
+                <div className="flex flex-1 flex-col p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h2 className="font-semibold">{t.name}</h2>
+                    <Badge>Not orderable yet</Badge>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                    <dt className="text-muted">In-game amount</dt>
+                    <dd className="num text-right">{fmtGta(t.gta)}</dd>
+                    <dt className="text-muted">Price</dt>
+                    <dd className="num text-right text-coral">{fmtSol(t.lamports)}</dd>
+                    <dt className="text-muted">Version</dt>
+                    <dd className="text-right">{VERSION_LABEL.gtao_gtav}</dd>
+                  </dl>
+                  <div className="mt-auto pt-5">
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      disabled={goal === t.tier || goalBusy === t.tier}
+                      onClick={() => setAsGoal(t.tier)}
+                      aria-label={goal === t.tier ? `${t.name} is your goal` : `Set ${t.name} as your goal`}
+                    >
+                      {goal === t.tier ? "Your goal" : goalBusy === t.tier ? "Saving…" : "Set goal"}
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : filtered.length === 0 ? (
         <EmptyState title="Nothing matches" action={<Button variant="secondary" onClick={reset}>Reset filters</Button>}>
           Try another platform or region.
@@ -134,7 +162,6 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <h2 className="font-semibold">{i.name}</h2>
                     <div className="flex gap-1.5">
-                      {i.isDemo && <Badge tone="butter">Demo item</Badge>}
                       {oos ? <Badge tone="danger">Out of stock</Badge> : <Badge tone="mint">{i.stock === null ? "Available" : `${i.stock} in stock`}</Badge>}
                     </div>
                   </div>
@@ -172,7 +199,7 @@ export function RewardsBrowser({ items, available, defaults, selectedTier, demo,
         </ul>
       )}
 
-      <RedeemDialog key={active?.id ?? "none"} item={active} demo={demo} userPlatform={defaults.platform} shark={shark} onClose={() => setActive(null)} />
+      <RedeemDialog key={active?.id ?? "none"} item={active} userPlatform={defaults.platform} shark={shark} onClose={() => setActive(null)} />
     </>
   );
 }

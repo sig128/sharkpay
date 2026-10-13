@@ -3,24 +3,18 @@
 import { useRef } from "react";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { MembershipCard } from "@/components/brand/MembershipCard";
-import { PhoneFrame, WalletPass, type WalletPassData } from "@/components/brand/WalletPass";
-import { PreviewBadge } from "@/components/ui/Badges";
-
-interface Props {
-  memberName: string;
-  membershipId: string;
-  balance: number;
-  pass: WalletPassData;
-}
+import { PhoneFrame, WalletPass } from "@/components/brand/WalletPass";
+import { showcasePass, type Showcase } from "@/components/brand/placeholders";
 
 const beats = [
   { title: "Your card, on the web", body: "The full-colour membership card lives on the site and in the app." },
-  { title: "Resolved into a Wallet pass", body: "Apple Wallet shows a clean, flat pass with your $SHARK holdings, SOL rewards and membership reference." },
+  { title: "Resolved into a Wallet pass", body: "Apple Wallet shows a clean, flat pass with your $SHARK holdings, SOL owed to your wallets and membership reference." },
   { title: "A view, not a wallet of money", body: "The pass can't pay or redeem. Redemption always happens in the signed-in app." },
 ];
 
-export function WalletSection(props: Props) {
+export function WalletSection({ showcase }: { showcase: Showcase }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pass = showcasePass(showcase);
   const reduce = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
 
@@ -56,9 +50,7 @@ export function WalletSection(props: Props) {
         not turn SOL rewards or GTA$ into spendable money. A future payment card would need a regulated issuing
         partner and is shown in the app as planned, not live.
       </div>
-      <div className="mt-5">
-        <PreviewBadge label="Preview · not an official Apple product" />
-      </div>
+      <p className="mt-5 text-xs text-muted">Not an official Apple product.</p>
     </div>
   );
 
@@ -68,9 +60,9 @@ export function WalletSection(props: Props) {
         <div className="container-site grid grid-cols-1 items-center gap-12 lg:grid-cols-12">
           <div className="lg:col-span-5">{copy}</div>
           <div className="grid grid-cols-1 items-center gap-10 sm:grid-cols-2 lg:col-span-7">
-            <MembershipCard {...props} pose={{ x: 0, y: 0, z: 0 }} interactive={false} />
+            <MembershipCard showcase={showcase} pose={{ x: 0, y: 0, z: 0 }} interactive={false} />
             <PhoneFrame className="mx-auto w-[240px] text-[10px]">
-              <WalletPass data={props.pass} fontSize="inherit" />
+              <WalletPass data={pass} fontSize="inherit" />
             </PhoneFrame>
           </div>
         </div>
@@ -88,7 +80,7 @@ export function WalletSection(props: Props) {
             <motion.div style={{ opacity: phoneOpacity, y: phoneY }} className="absolute aspect-[0.5/1] h-full max-h-[600px]">
               <PhoneFrame className="h-full text-[clamp(7px,1.5svh,11px)]">
                 <motion.div style={{ opacity: passOpacity }}>
-                  <WalletPass data={props.pass} fontSize="inherit" />
+                  <WalletPass data={pass} fontSize="inherit" />
                 </motion.div>
               </PhoneFrame>
             </motion.div>
@@ -96,7 +88,7 @@ export function WalletSection(props: Props) {
               style={{ rotateX: cardRotX, rotateY: cardRotY, scale: cardScale, x: cardX, opacity: cardOpacity, transformPerspective: 1400 }}
               className="absolute w-[min(92%,520px)]"
             >
-              <MembershipCard {...props} pose={{ x: 0, y: 0, z: 0 }} interactive={false} />
+              <MembershipCard showcase={showcase} pose={{ x: 0, y: 0, z: 0 }} interactive={false} />
             </motion.div>
           </div>
         </div>

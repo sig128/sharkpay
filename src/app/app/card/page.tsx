@@ -4,16 +4,16 @@ import type { Metadata } from "next";
 import { brand } from "@/config/brand";
 import { requirePageSession } from "@/lib/server/guard";
 import { passModel, membershipId, maskMembershipId } from "@/lib/server/passes/pass";
-import { userBalances } from "@/lib/server/ledger/ledger";
-import { userAllocations, clearMatured } from "@/lib/server/rewards/periods";
+import { memberRewards } from "@/lib/server/rewards/member";
+import { payoutView } from "@/lib/server/services/dashboard";
 import { integrations } from "@/lib/server/env";
 import { cardIssuer } from "@/lib/server/issuer/issuer";
 import { MembershipCard } from "@/components/brand/MembershipCard";
 import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { PassPreview } from "@/components/app/PassPreview";
 import { Waitlist } from "@/components/app/Waitlist";
-import { Badge, PreviewBadge } from "@/components/ui/Badges";
-import { fmtDate, fmtDateTime, fmtSol } from "@/lib/format";
+import { Badge } from "@/components/ui/Badges";
+import { fmtDateTime, fmtSol } from "@/lib/format";
 
 export const metadata: Metadata = { title: "My Card" };
 
@@ -21,18 +21,16 @@ const OFFICIAL_BADGE = "/brand/apple/add-to-apple-wallet.svg";
 
 export default async function CardPage() {
   const { session, user } = await requirePageSession();
-  clearMatured(session.realm);
   const model = passModel(session.realm, session.userId);
-  const b = userBalances(session.realm, session.userId);
-  const recent = userAllocations(session.realm, session.userId).slice(0, 4);
-  const demo = session.kind === "demo";
+  const rewards = memberRewards(session.userId, 4);
+  const recent = rewards.payouts.map(payoutView);
   const signing = integrations().applePass && session.realm === "live";
   const badgeAvailable = fs.existsSync(path.join(process.cwd(), "public", OFFICIAL_BADGE));
   const mid = membershipId(session.userId);
 
   return (
     <>
-      <PageHeader eyebrow="My Card" title="Membership" actions={demo ? <PreviewBadge /> : undefined}>
+      <PageHeader eyebrow="My Card" title="Membership">
         Your {brand.name} card on the web, and a simpler Apple Wallet pass for checking your balance on the go.
       </PageHeader>
 
@@ -42,14 +40,13 @@ export default async function CardPage() {
           <MembershipCard
             memberName={user.display_name}
             membershipId={maskMembershipId(mid)}
-            balance={b.payable}
-            demo={demo}
+            balance={rewards.owed}
             priority="hero"
             className="w-full max-w-[520px]"
           />
         </section>
 
-        <Panel title="Apple Wallet pass" className="lg:col-span-5" action={<Badge>{signing ? "Signing configured" : "Preview"}</Badge>}>
+        <Panel title="Apple Wallet pass" className="lg:col-span-5" action={<Badge>{signing ? "Signing configured" : "Not available yet"}</Badge>}>
           <PassPreview model={model} />
           <div className="mt-5">
             {signing ? (
@@ -63,9 +60,7 @@ export default async function CardPage() {
               )
             ) : (
               <p className="rounded-xl border border-line bg-white/[0.03] p-3 text-sm text-muted">
-                {demo
-                  ? "This is a working preview. Signed passes are issued only for real accounts once an Apple pass certificate is configured."
-                  : "Adding to Apple Wallet becomes available once the signed pass service is configured on this server."}
+                Adding to Apple Wallet becomes available once the signed pass service is configured on this server.
               </p>
             )}
           </div>
@@ -75,8 +70,8 @@ export default async function CardPage() {
           <KV
             items={[
               ["Membership ID", <span key="m" className="num text-xs">{maskMembershipId(mid)}</span>],
-              ["SOL ready", <span key="a" className="num">{fmtSol(b.payable)}</span>],
-              ["Pending", <span key="p" className="num">{fmtSol(b.pending)}</span>],
+              ["SOL owed", <span key="a" className="num">{fmtSol(rewards.owed)}</span>],
+              ["SOL paid", <span key="p" className="num">{fmtSol(rewards.paid)}</span>],
               ["Last updated", <span key="u" className="num text-xs">{fmtDateTime(model.updatedAt)}</span>],
             ]}
           />
@@ -85,23 +80,23 @@ export default async function CardPage() {
           </p>
         </Panel>
 
-        <Panel title="Recent rewards" className="lg:col-span-7">
+        <Panel title="Recent payouts" className="lg:col-span-7">
           {recent.length ? (
             <ul className="divide-y divide-line text-sm">
-              {recent.map((a) => (
-                <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
+              {recent.map((p) => (
+                <li key={`${p.signature}:${p.wallet}`} className="flex items-center justify-between gap-3 py-2.5">
                   <span>
-                    Period #{a.seq} <span className="font-mono text-xs text-muted">· {fmtDate(a.ends_at * 1000)}</span>
+                    <a href={p.explorerUrl} target="_blank" rel="noreferrer" className="num text-xs text-coral hover:underline">
+                      {p.masked}
+                    </a>{" "}
+                    <span className="font-mono text-xs text-muted">· {fmtDateTime(p.paidAt)}</span>
                   </span>
-                  <span className="flex items-center gap-2">
-                    {a.status === "pending" ? <Badge tone="butter">Pending</Badge> : <Badge tone="mint">Ready</Badge>}
-                    <span className="num text-mint">+{fmtSol(a.lamports)}</span>
-                  </span>
+                  <span className="num text-mint">+{fmtSol(p.lamports)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted">No reward allocations yet.</p>
+            <p className="text-sm text-muted">No SOL has been sent to your linked wallets yet.</p>
           )}
         </Panel>
 

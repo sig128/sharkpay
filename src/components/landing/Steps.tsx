@@ -3,18 +3,20 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { clsx } from "clsx";
 import { brand } from "@/config/brand";
+import { CARD_TIERS } from "@/config/tiers";
+import { fmtGta, fmtSol } from "@/lib/format";
 
 interface StepsProps {
-  sample: { budget: number; share: number; allocation: number; holderShareBps: number; periodDays: number };
+  payouts: { intervalMinutes: number; holderShareBps: number; minPayoutLamports: number };
 }
 
 const steps = [
-  { key: "hold", n: "01", title: "Hold", short: `Keep ${brand.ticker} in a wallet you link.` },
-  { key: "receive", n: "02", title: "Receive", short: "Get a share of funded rewards." },
+  { key: "hold", n: "01", title: "Hold", short: `Keep ${brand.ticker} in any Solana wallet.` },
+  { key: "receive", n: "02", title: "Receive", short: "Get SOL from creator fees, automatically." },
   { key: "redeem", n: "03", title: "Redeem", short: `Pay ${brand.ticker} for Shark Cards.` },
 ] as const;
 
-export function Steps({ sample }: StepsProps) {
+export function Steps({ payouts }: StepsProps) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -91,8 +93,8 @@ export function Steps({ sample }: StepsProps) {
               tabIndex={0}
               className="panel noise relative h-full min-h-[440px] overflow-hidden p-6 md:p-10"
             >
-              {s.key === "hold" && <HoldPanel />}
-              {s.key === "receive" && <ReceivePanel sample={sample} />}
+              {s.key === "hold" && <HoldPanel payouts={payouts} />}
+              {s.key === "receive" && <ReceivePanel payouts={payouts} />}
               {s.key === "redeem" && <RedeemPanel />}
             </div>
           ))}
@@ -102,15 +104,15 @@ export function Steps({ sample }: StepsProps) {
   );
 }
 
-function HoldPanel() {
+function HoldPanel({ payouts }: StepsProps) {
   const bars = [0.2, 0.2, 0.55, 0.55, 0.55, 0.9, 0.9];
   return (
     <div className="flex h-full flex-col">
-      <h3 className="display text-4xl md:text-5xl">Hold through the period</h3>
+      <h3 className="display text-4xl md:text-5xl">Just hold</h3>
       <p className="mt-4 max-w-xl text-muted">
-        Link a Solana wallet by signing a one-time message. That proves ownership; it never approves a transaction or
-        token spending. Rewards use your <strong className="text-warm">time-weighted</strong> eligible balance across the
-        whole period, so buying a minute before the cut-off barely moves your share.
+        Every wallet holding {brand.ticker} counts, whether or not it&apos;s linked here. Balances are read from Solana
+        every few minutes, and each payout uses your <strong className="text-warm">average</strong> balance since the
+        previous one, so buying a minute before a payout barely moves your share.
       </p>
       <div className="mt-auto pt-10">
         <div className="flex h-40 items-end gap-2" aria-hidden="true">
@@ -119,40 +121,44 @@ function HoldPanel() {
           ))}
         </div>
         <div className="mt-3 flex justify-between font-mono text-[0.7rem] text-muted">
-          <span>Period start</span>
-          <span>Balance × time held</span>
-          <span>Period end</span>
+          <span>Last payout</span>
+          <span>Average balance</span>
+          <span>Next payout · {payouts.intervalMinutes} min</span>
         </div>
         <p className="mt-6 text-sm text-muted">
-          Liquidity pools, exchange wallets, treasury and fee-authority accounts are excluded and never treated as members.
+          Liquidity pools, the fee wallet and other program-owned accounts are excluded. Linking a wallet to your account
+          only lets you see its rewards here.
         </p>
       </div>
     </div>
   );
 }
 
-function ReceivePanel({ sample }: StepsProps) {
+function ReceivePanel({ payouts }: StepsProps) {
   return (
     <div className="flex h-full flex-col">
-      <h3 className="display text-4xl md:text-5xl">Receive a funded share</h3>
+      <h3 className="display text-4xl md:text-5xl">SOL, sent automatically</h3>
       <p className="mt-4 max-w-xl text-muted">
-        Rewards come only from fees that were actually collected <em>and</em> settled. In the demo configuration{" "}
-        {sample.holderShareBps / 100}% of net settled proceeds funds the holder pool. The amount changes every period
-        and can be zero. There is no fixed rate or yield.
+        Every {payouts.intervalMinutes} minutes the server claims the pump.fun creator fees {brand.ticker} trading has
+        earned. {payouts.holderShareBps / 100}% of that new SOL is split between holders by average balance; the rest funds
+        operations. The amount depends on real trading and can be zero. There is no fixed rate or yield.
       </p>
       <div className="mt-auto pt-8">
         <div className="rounded-2xl border border-line bg-midnight/60 p-5 md:p-6">
-          <div className="eyebrow">Your allocation</div>
+          <div className="eyebrow">Each run</div>
           <div className="mt-3 grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-2 font-mono text-sm md:text-base">
-            <span className="text-muted">Funded budget</span>
-            <span className="num text-right text-warm">{sample.budget.toLocaleString("en-US")} CR</span>
-            <span className="text-muted">× your weight</span>
-            <span className="num text-right text-warm">{sample.share.toFixed(4)}%</span>
-            <span className="text-muted">= allocation</span>
-            <span className="num text-right text-xl text-mint">{sample.allocation.toLocaleString("en-US")} CR</span>
+            <span className="text-muted">New creator fees</span>
+            <span className="text-right text-warm">claimed on-chain</span>
+            <span className="text-muted">× holder share</span>
+            <span className="num text-right text-warm">{payouts.holderShareBps / 100}%</span>
+            <span className="text-muted">× your share</span>
+            <span className="text-right text-warm">of the average balance</span>
+            <span className="text-muted">= sent to you</span>
+            <span className="text-right text-xl text-mint">in SOL</span>
           </div>
           <p className="mt-4 text-xs text-muted">
-            Rounded down. Leftover fractions and unclaimed shares carry forward to the next period. Sample figures.
+            Wallets owed at least {fmtSol(payouts.minPayoutLamports)} are paid in that run. Smaller amounts keep adding up
+            until they reach it.
           </p>
         </div>
       </div>
@@ -160,12 +166,10 @@ function ReceivePanel({ sample }: StepsProps) {
   );
 }
 
+const REDEEM_TIERS = new Set(["red", "bull", "great_white"]);
+
 function RedeemPanel() {
-  const rows = [
-    { name: "Red Shark Card", gta: "GTA$100,000", cost: "0.45 SOL" },
-    { name: "Bull Shark Card", gta: "GTA$600,000", cost: "1.5 SOL" },
-    { name: "Great White Shark Card", gta: "GTA$1,250,000", cost: "3 SOL" },
-  ];
+  const rows = CARD_TIERS.filter((t) => REDEEM_TIERS.has(t.tier)).map((t) => ({ name: t.name, gta: fmtGta(t.gta), cost: fmtSol(t.lamports) }));
   return (
     <div className="flex h-full flex-col">
       <h3 className="display text-4xl md:text-5xl">Redeem for game credit</h3>
@@ -184,7 +188,7 @@ function RedeemPanel() {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted">Demo catalog. SOL prices are placeholders for the operator to set.</p>
+      <p className="mt-3 text-xs text-muted">Fixed SOL prices. Cards can be ordered once a fulfilment partner is connected.</p>
     </div>
   );
 }

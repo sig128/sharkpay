@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { brand } from "@/config/brand";
 import { currentSession } from "@/lib/server/http";
 import { gamingProviders, socialProviders } from "@/lib/server/auth/providers";
-import { integrations } from "@/lib/server/env";
+import { env, integrations } from "@/lib/server/env";
+import { showcaseFrom } from "@/components/brand/placeholders";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { Atmosphere } from "@/components/brand/Atmosphere";
 import { MembershipCard } from "@/components/brand/MembershipCard";
@@ -19,6 +20,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (session) redirect("/app");
   const sp = await searchParams;
   const i = integrations();
+  const e = env();
   const error = sp.error ? (AUTH_ERRORS[sp.error] ?? AUTH_ERRORS.signin_failed) : null;
 
   return (
@@ -30,7 +32,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </div>
         <div className="absolute inset-0 flex items-center justify-center px-16">
           <div className="w-full max-w-[460px] [animation:float-y_9s_ease-in-out_infinite] motion-reduce:animate-none">
-            <MembershipCard memberName="Your name" membershipId="SC-••••-••••-••••" balance={null} demo priority="hero" interactive={false} />
+            <MembershipCard
+              showcase={showcaseFrom({ holderShareBps: e.HOLDER_SHARE_BPS, intervalMinutes: e.PAYOUT_INTERVAL_MINUTES, appUrl: e.APP_URL })}
+              priority="hero"
+              interactive={false}
+            />
           </div>
         </div>
         <p className="absolute bottom-10 left-12 max-w-sm text-sm text-warm/80">{brand.tagline}</p>

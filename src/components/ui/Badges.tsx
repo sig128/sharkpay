@@ -25,13 +25,3 @@ export function Badge({ tone = "neutral", children, className }: { tone?: Tone; 
     </span>
   );
 }
-
-/** Shown wherever sample information is displayed. */
-export function PreviewBadge({ label = "Product preview", className }: { label?: string; className?: string }) {
-  return (
-    <Badge tone="butter" className={className}>
-      <span className="h-1.5 w-1.5 rounded-full bg-butter" aria-hidden="true" />
-      {label}
-    </Badge>
-  );
-}

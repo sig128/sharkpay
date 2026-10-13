@@ -1,11 +1,11 @@
 import { all, one, run, tx } from "../db";
 import { lookupHash, randomId } from "../crypto";
-import { AppError, forbidden, notFound } from "../errors";
+import { AppError, notFound } from "../errors";
 import { isRecentlyAuthenticated, type Session } from "./sessions";
 
-export type Provider = "microsoft" | "xbox" | "steam" | "google" | "x" | "email" | "demo";
+export type Provider = "microsoft" | "xbox" | "steam" | "google" | "x" | "email";
 /** Providers that can sign a user in. Xbox is a verification link on top of Microsoft sign-in. */
-export const LOGIN_PROVIDERS: Provider[] = ["microsoft", "steam", "google", "x", "email", "demo"];
+export const LOGIN_PROVIDERS: Provider[] = ["microsoft", "steam", "google", "x", "email"];
 
 export interface ProviderProfile {
   provider: Provider;
@@ -110,7 +110,6 @@ function insertIdentity(userId: string, realm: string, profile: ProviderProfile,
 }
 
 export function requireRecentAuth(session: Session, now = Date.now()) {
-  if (session.kind === "demo") throw forbidden("Demo sessions cannot link real accounts");
   if (!isRecentlyAuthenticated(session, now)) {
     throw new AppError("reauth_required", "Confirm it's you by signing in again", 403);
   }

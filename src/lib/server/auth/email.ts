@@ -21,7 +21,7 @@ export function normalizeEmail(raw: string) {
   return email;
 }
 
-/** Sends a one-time sign-in code. Returns the dev-outbox code only in local demo mode. */
+/** Sends a one-time sign-in code. Returns the dev-outbox code only in local development. */
 export async function requestEmailCode(rawEmail: string, now = Date.now()) {
   if (!integrations().email) throw new AppError("provider_unavailable", "Email sign-in is not configured", 503);
   const email = normalizeEmail(rawEmail);

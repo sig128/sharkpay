@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { requirePageSession } from "@/lib/server/guard";
 import { listWallets, maskAddress } from "@/lib/server/wallet/verify";
 import { isRecentlyAuthenticated } from "@/lib/server/auth/sessions";
-import { DEMO_TIERS } from "@/lib/server/catalog/catalog";
+import { CARD_TIERS } from "@/lib/server/catalog/catalog";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { Onboarding } from "@/components/auth/Onboarding";
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Set up your membership", robots: { i
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { session, user } = await requirePageSession();
-  if (session.kind === "demo" || user.onboarded_at) redirect("/app");
+  if (user.onboarded_at) redirect("/app");
   const sp = await searchParams;
   const wallets = listWallets(user.id).map((w) => ({ id: w.id, address: maskAddress(w.address), verifiedAt: w.verified_at }));
   const platform = user.reward_platform ?? (["pc", "playstation", "xbox"].includes(sp.platform ?? "") ? sp.platform! : null);
@@ -26,7 +26,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <p className="mt-3 text-muted">Three quick choices. You can change all of them later.</p>
         <Onboarding
           initial={{ platform, region: user.reward_region, tier: user.selected_item_tier }}
-          tiers={DEMO_TIERS.map((t) => ({ id: t.tier, name: t.name, gta: t.gta }))}
+          tiers={CARD_TIERS.map((t) => ({ id: t.tier, name: t.name, gta: t.gta }))}
           wallets={wallets}
           canLinkWallet={isRecentlyAuthenticated(session)}
         />

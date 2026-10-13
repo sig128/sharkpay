@@ -4,9 +4,8 @@ import path from "node:path";
 import { env } from "./env";
 
 /**
- * Local transactional store (SQLite, WAL). Every table carries a `realm`:
- * `live` for real accounts, `demo:<id>` for an isolated demo sandbox. Queries
- * always filter by realm so demo activity can never touch real balances.
+ * Local transactional store (SQLite, WAL). Tables carry a `realm` column; all
+ * data is in the `live` realm.
  */
 
 const SCHEMA = `
@@ -122,19 +121,6 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS wallets_active_address ON wallets(realm, address) WHERE unlinked_at IS NULL;
 
-CREATE TABLE IF NOT EXISTS holding_events (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  owner TEXT NOT NULL,
-  token_account TEXT NOT NULL,
-  balance_raw TEXT NOT NULL,
-  slot INTEGER NOT NULL,
-  block_time INTEGER NOT NULL,
-  signature TEXT NOT NULL,
-  UNIQUE (realm, token_account, signature)
-);
-CREATE INDEX IF NOT EXISTS holding_events_owner ON holding_events(realm, owner, block_time);
-
 CREATE TABLE IF NOT EXISTS exclusions (
   realm TEXT NOT NULL,
   address TEXT NOT NULL,
@@ -145,39 +131,76 @@ CREATE TABLE IF NOT EXISTS exclusions (
   PRIMARY KEY (realm, address)
 );
 
-CREATE TABLE IF NOT EXISTS chain_watermarks (
-  realm TEXT PRIMARY KEY,
-  finalized_slot INTEGER NOT NULL,
-  finalized_time INTEGER NOT NULL,
+-- Holder balances read from chain every SNAPSHOT_INTERVAL_MINUTES (live only).
+CREATE TABLE IF NOT EXISTS holder_snapshots (
+  id TEXT PRIMARY KEY,
+  taken_at INTEGER NOT NULL,
+  holders INTEGER NOT NULL,
+  total_raw TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS holder_snapshots_time ON holder_snapshots(taken_at);
+
+CREATE TABLE IF NOT EXISTS holder_snapshot_balances (
+  snapshot_id TEXT NOT NULL REFERENCES holder_snapshots(id) ON DELETE CASCADE,
+  owner TEXT NOT NULL,
+  balance_raw TEXT NOT NULL,
+  PRIMARY KEY (snapshot_id, owner)
+);
+
+-- One row per automatic payout run.
+CREATE TABLE IF NOT EXISTS payout_cycles (
+  id TEXT PRIMARY KEY,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  status TEXT NOT NULL,
+  claim_signature TEXT,
+  balance_lamports INTEGER,
+  income_lamports INTEGER NOT NULL DEFAULT 0,
+  holder_lamports INTEGER NOT NULL DEFAULT 0,
+  ops_lamports INTEGER NOT NULL DEFAULT 0,
+  snapshots INTEGER NOT NULL DEFAULT 0,
+  holders INTEGER NOT NULL DEFAULT 0,
+  credited_lamports INTEGER NOT NULL DEFAULT 0,
+  paid_lamports INTEGER NOT NULL DEFAULT 0,
+  paid_wallets INTEGER NOT NULL DEFAULT 0,
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS payout_cycles_started ON payout_cycles(started_at);
+
+-- A signed SOL transfer transaction. Written before it is broadcast so a crash
+-- can never cause the same debt to be paid twice.
+CREATE TABLE IF NOT EXISTS payout_transfers (
+  id TEXT PRIMARY KEY,
+  cycle_id TEXT NOT NULL REFERENCES payout_cycles(id),
+  signature TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL,
+  lamports INTEGER NOT NULL,
+  recipients TEXT NOT NULL,
+  last_valid_block_height INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  settled_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS payout_transfers_status ON payout_transfers(status);
+
+CREATE TABLE IF NOT EXISTS holder_payouts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transfer_id TEXT NOT NULL REFERENCES payout_transfers(id),
+  wallet TEXT NOT NULL,
+  lamports INTEGER NOT NULL,
+  paid_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS holder_payouts_wallet ON holder_payouts(wallet, paid_at);
+
+CREATE TABLE IF NOT EXISTS job_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS fee_events (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  amount_raw TEXT NOT NULL,
-  slot INTEGER NOT NULL,
-  block_time INTEGER NOT NULL,
-  signature TEXT NOT NULL,
-  ix_index INTEGER NOT NULL DEFAULT 0,
-  UNIQUE (realm, signature, kind, ix_index)
-);
-
-CREATE TABLE IF NOT EXISTS settlements (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  tokens_sold_raw TEXT NOT NULL,
-  gross_lamports INTEGER NOT NULL,
-  costs_lamports INTEGER NOT NULL,
-  net_lamports INTEGER NOT NULL,
-  holder_share_bps INTEGER NOT NULL,
-  holder_lamports INTEGER NOT NULL,
-  ops_lamports INTEGER NOT NULL,
-  venue TEXT NOT NULL,
-  signature TEXT NOT NULL,
-  settled_at INTEGER NOT NULL,
-  UNIQUE (realm, signature)
+CREATE TABLE IF NOT EXISTS job_locks (
+  name TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS operating_costs (
@@ -187,50 +210,6 @@ CREATE TABLE IF NOT EXISTS operating_costs (
   usd_micros INTEGER NOT NULL,
   incurred_at INTEGER NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS reward_periods (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  seq INTEGER NOT NULL,
-  starts_at INTEGER NOT NULL,
-  ends_at INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  budget_lamports INTEGER,
-  total_weight TEXT,
-  allocated_lamports INTEGER,
-  carried_lamports INTEGER,
-  eligible_wallets INTEGER,
-  finalized_at INTEGER,
-  UNIQUE (realm, seq)
-);
-
-CREATE TABLE IF NOT EXISTS allocations (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  period_id TEXT NOT NULL REFERENCES reward_periods(id),
-  wallet TEXT NOT NULL,
-  user_id TEXT,
-  weight TEXT NOT NULL,
-  lamports INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  available_at INTEGER,
-  created_at INTEGER NOT NULL,
-  UNIQUE (period_id, wallet)
-);
-CREATE INDEX IF NOT EXISTS allocations_user ON allocations(user_id);
-
-CREATE TABLE IF NOT EXISTS payouts (
-  id TEXT PRIMARY KEY,
-  realm TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  wallet TEXT NOT NULL,
-  lamports INTEGER NOT NULL,
-  signature TEXT NOT NULL UNIQUE,
-  verified_by TEXT NOT NULL,
-  paid_at INTEGER NOT NULL,
-  recorded_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS payouts_user ON payouts(user_id);
 
 CREATE TABLE IF NOT EXISTS ledger_txns (
   id TEXT PRIMARY KEY,
@@ -393,13 +372,15 @@ function open(file: string): DatabaseSync {
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
   migrateCreditEra(db);
+  const version = (db.prepare(`PRAGMA user_version`).get() as { user_version: number }).user_version;
   db.exec(SCHEMA);
+  if (version < 3) purgeDemoRealms(db);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
 
-/** 2: prices in SOL, rewards in lamports, no reward credits. */
-const SCHEMA_VERSION = 2;
+/** 2: prices in SOL, rewards in lamports. 3: automatic holder payouts from the fee wallet. */
+const SCHEMA_VERSION = 3;
 
 const CREDIT_ERA_TABLES = [
   "order_events",
@@ -452,6 +433,29 @@ function migrateCreditEra(db: DatabaseSync) {
   try {
     for (const t of CREDIT_ERA_TABLES) db.exec(`DROP TABLE IF EXISTS ${t}`);
     for (const t of DEMO_SCOPED_TABLES) if (tables.has(t)) db.exec(`DELETE FROM ${t} WHERE realm LIKE 'demo:%'`);
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+/** The demo sandbox is gone; drop its rows once. Live rows are untouched. */
+function purgeDemoRealms(db: DatabaseSync) {
+  const tables = (
+    db.prepare(`SELECT m.name FROM sqlite_master m WHERE m.type = 'table'
+      AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) WHERE name = 'realm')`).all() as Array<{ name: string }>
+  ).map((t) => t.name);
+  const order = ["ledger_entries", "ledger_txns", "order_events"];
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(`DELETE FROM order_events WHERE order_id IN (SELECT id FROM orders WHERE realm LIKE 'demo:%')`);
+    for (const t of [...order.filter((t) => tables.includes(t)), ...tables.filter((t) => !order.includes(t))]) {
+      db.exec(`DELETE FROM ${t} WHERE realm LIKE 'demo:%'`);
+    }
     db.exec("COMMIT");
   } catch (err) {
     db.exec("ROLLBACK");

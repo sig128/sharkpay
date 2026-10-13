@@ -96,7 +96,7 @@ export function Onboarding({
         <h2 id="ob-wallet" className="mb-1 text-lg font-bold">
           Link a Solana wallet <span className="text-sm font-normal text-muted">(optional)</span>
         </h2>
-        <p className="mb-4 text-sm text-muted">Rewards are based on your time-weighted balance in linked wallets. You can do this later from Connected accounts.</p>
+        <p className="mb-4 text-sm text-muted">Every $SHARK holder wallet is paid automatically, linked or not. Linking one shows its rewards and payouts here. You can do this later from Connected accounts.</p>
         <WalletLinker wallets={wallets} canChange={canLinkWallet} />
       </section>
 

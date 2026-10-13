@@ -7,7 +7,6 @@ import { AppError } from "@/lib/server/errors";
 import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { OrderStatus } from "@/components/app/OrderStatus";
 import { PrintButton } from "@/components/app/PrintButton";
-import { Badge } from "@/components/ui/Badges";
 import { brand } from "@/config/brand";
 import { fmtDateTime, fmtGta, fmtSol, PLATFORM_LONG, REGION_LABEL, VERSION_LABEL } from "@/lib/format";
 
@@ -33,7 +32,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         <Panel title="Status" className="lg:col-span-7">
           <OrderStatus initial={view} />
         </Panel>
-        <Panel title="Receipt" className="lg:col-span-5" action={view.simulated ? <Badge tone="butter">Demo order</Badge> : undefined}>
+        <Panel title="Receipt" className="lg:col-span-5">
           <KV
             items={[
               ["Order ID", <span key="o" className="num break-all text-xs">{view.id}</span>],
@@ -45,7 +44,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
               ["Region", item ? REGION_LABEL[item.region] : "—"],
               ["SKU", <span key="s" className="num text-xs">{item?.sku}</span>],
               ["Price", <span key="c" className="num">{view.payment.solPriceLamports != null ? fmtSol(view.payment.solPriceLamports) : "—"}</span>],
-              ["Provider", view.simulated ? "Demo provider (simulated)" : view.provider],
+              ["Provider", view.provider],
               ["Provider reference", <span key="r" className="num text-xs">{view.providerRef ?? "—"}</span>],
               ...(view.completedAt ? ([["Delivered", <span key="d" className="num text-xs">{fmtDateTime(view.completedAt)}</span>]] as Array<[string, React.ReactNode]>) : []),
               ...(view.reversedAt ? ([["Reversed", <span key="v" className="num text-xs">{fmtDateTime(view.reversedAt)}</span>]] as Array<[string, React.ReactNode]>) : []),

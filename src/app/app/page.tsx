@@ -6,9 +6,9 @@ import { overview } from "@/lib/server/services/dashboard";
 import { MembershipCard } from "@/components/brand/MembershipCard";
 import { PageHeader, Panel, KV } from "@/components/app/Page";
 import { ActivityRow } from "@/components/app/ActivityRow";
-import { Badge, PreviewBadge } from "@/components/ui/Badges";
+import { Badge } from "@/components/ui/Badges";
 import { ButtonLink } from "@/components/ui/Button";
-import { fmtDate, fmtDateTime, fmtGta, fmtSol, fmtTokens, fmtUsd, PLATFORM_LABEL, REGION_LABEL } from "@/lib/format";
+import { fmtDateTime, fmtGta, fmtSol, fmtTokens, PLATFORM_LABEL, REGION_LABEL } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -20,23 +20,18 @@ export default async function OverviewPage() {
   return (
     <>
       <PageHeader
-        eyebrow={o.isDemo ? "Overview · demo sandbox" : "Overview"}
+        eyebrow="Overview"
         title={`Hey, ${o.user.displayName.split(" ")[0]}`}
-        actions={
-          <>
-            {o.user.platform && <Badge>{PLATFORM_LABEL[o.user.platform]} · {o.user.region}</Badge>}
-            {o.isDemo && <PreviewBadge />}
-          </>
-        }
+        actions={o.user.platform ? <Badge>{PLATFORM_LABEL[o.user.platform]} · {o.user.region}</Badge> : undefined}
       />
 
-      {!o.qualifies && (
+      {!o.linked && (
         <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-coral/30 bg-coral/[0.07] p-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-semibold text-warm">Link wallet to qualify</h2>
+            <h2 className="font-semibold text-warm">Link a wallet to see your rewards</h2>
             <p className="mt-1 text-sm text-muted">
-              Holder rewards are credited only to a verified wallet. Linking takes one signed message and never approves a
-              transaction.
+              Every wallet holding {brand.ticker} is paid automatically, linked or not. Linking one just shows its rewards
+              here. It takes one signed message and never approves a transaction.
             </p>
           </div>
           <ButtonLink href="/app/accounts#wallets" variant="primary">
@@ -48,26 +43,28 @@ export default async function OverviewPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <section className="panel noise relative overflow-hidden p-6 md:p-8 lg:col-span-8" aria-labelledby="bal-title">
           <div aria-hidden="true" className="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-pink/20 blur-3xl" />
-          <h2 id="bal-title" className="eyebrow relative">SOL rewards ready to pay out</h2>
+          <h2 id="bal-title" className="eyebrow relative">SOL owed to your wallets</h2>
           <div className="relative mt-3 flex flex-wrap items-baseline gap-x-3">
-            <span className="display text-[clamp(3rem,10vw,6rem)] tabular-nums">{fmtSol(o.balances.payable, { unit: false })}</span>
+            <span className="display text-[clamp(3rem,10vw,6rem)] tabular-nums">{fmtSol(o.rewards.owed, { unit: false })}</span>
             <span className="font-mono text-lg text-muted">SOL</span>
           </div>
           <dl className="relative mt-6 grid grid-cols-2 gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-line bg-midnight/40 p-4">
-              <dt className="text-xs text-muted">Pending</dt>
-              <dd className="num mt-1 text-xl">{fmtSol(o.balances.pending)}</dd>
-              {o.latestPeriod?.availableAt && o.latestPeriod.myStatus === "pending" && (
-                <dd className="mt-1 text-xs text-muted">Clears {fmtDateTime(o.latestPeriod.availableAt)}</dd>
-              )}
+              <dt className="text-xs text-muted">Already paid out</dt>
+              <dd className="num mt-1 text-xl">{fmtSol(o.rewards.paid)}</dd>
             </div>
             <div className="rounded-xl border border-line bg-midnight/40 p-4">
-              <dt className="text-xs text-muted">Already paid out</dt>
-              <dd className="num mt-1 text-xl">{fmtSol(o.balances.paid)}</dd>
+              <dt className="text-xs text-muted">Next payout run</dt>
+              <dd className="num mt-1 text-sm">
+                {o.payouts.live ? (o.payouts.nextCycleAt ? fmtDateTime(o.payouts.nextCycleAt) : "Soon") : "Not live yet"}
+              </dd>
             </div>
             <div className="col-span-2 rounded-xl border border-line bg-midnight/40 p-4 md:col-span-1">
               <dt className="text-xs text-muted">What this is</dt>
-              <dd className="mt-1 text-xs leading-relaxed text-muted">Your share of settled fees, in SOL. Not a guaranteed yield. The website never sends it — the operator does.</dd>
+              <dd className="mt-1 text-xs leading-relaxed text-muted">
+                Your share of creator fees, in SOL. Sent automatically once it reaches {fmtSol(o.payouts.minPayoutLamports)}.
+                Not a guaranteed yield.
+              </dd>
             </div>
           </dl>
           <div className="relative mt-6 flex flex-wrap gap-3">
@@ -84,81 +81,67 @@ export default async function OverviewPage() {
           <MembershipCard
             memberName={o.user.displayName}
             membershipId={o.user.membershipId}
-            balance={o.balances.payable}
-            demo={o.isDemo}
+            balance={o.rewards.owed}
             pose={{ x: 6, y: -10, z: -3 }}
             className="my-auto px-2 py-4"
           />
         </section>
 
         <Panel title="Token holdings" className="lg:col-span-4" id="hold-title">
-          {o.qualifies ? (
+          {o.linked ? (
             <>
               <div className="num text-2xl">{fmtTokens(o.holdings.tokens, brand.ticker)}</div>
               <p className="mt-1 text-xs text-muted">
-                Across {o.holdings.tokenAccounts} token account{o.holdings.tokenAccounts === 1 ? "" : "s"} in {o.wallets.length} linked wallet{o.wallets.length === 1 ? "" : "s"}
+                Across {o.wallets.length} linked wallet{o.wallets.length === 1 ? "" : "s"}
+                {o.holdings.takenAt ? ` · as of ${fmtDateTime(o.holdings.takenAt)}` : ""}
               </p>
-              <KV
-                className="mt-4"
-                items={[
-                  [
-                    "Market value",
-                    o.holdings.sampleValueUsd !== null ? (
-                      <span className="num">{fmtUsd(o.holdings.sampleValueUsd)} <span className="text-xs text-muted">sample price</span></span>
-                    ) : (
-                      <span className="text-muted">No price feed connected</span>
-                    ),
-                  ],
-                  [
-                    "Latest eligible weight",
-                    o.latestWeight ? (
-                      <span className="num">{o.latestWeight.share.toFixed(4)}% <span className="text-xs text-muted">period {o.latestWeight.periodSeq}</span></span>
-                    ) : (
-                      <span className="text-muted">No finalized period yet</span>
-                    ),
-                  ],
-                  ["Time-weighted average", o.latestWeight ? <span className="num">{fmtTokens(o.latestWeight.averageTokens, brand.ticker)}</span> : "—"],
-                ]}
-              />
+              {!o.holdings.takenAt && <p className="mt-3 text-sm text-muted">No holder snapshot yet. Balances appear once payouts are live.</p>}
               <p className="mt-3 text-xs text-muted">Token value is separate from SOL rewards and from GTA$.</p>
             </>
           ) : (
-            <p className="text-sm text-muted">Link a wallet to see holdings and your eligible weight.</p>
+            <p className="text-sm text-muted">Link a wallet to see its holdings.</p>
           )}
         </Panel>
 
-        <Panel title="Latest reward period" className="lg:col-span-4" id="period-title">
-          {o.latestPeriod ? (
+        <Panel title="Latest payout" className="lg:col-span-4" id="payout-title">
+          {o.rewards.latestPayout ? (
             <>
               <div className="flex items-baseline gap-2">
-                <span className="num text-2xl text-mint">+{fmtSol(o.latestPeriod.myAllocation)}</span>
-                <span className="text-sm text-muted">SOL allocated to you</span>
+                <span className="num text-2xl text-mint">+{fmtSol(o.rewards.latestPayout.lamports)}</span>
+                <span className="text-sm text-muted">sent to {o.rewards.latestPayout.masked}</span>
               </div>
               <KV
                 className="mt-4"
                 items={[
-                  ["Period", <span key="p" className="num">#{o.latestPeriod.seq} · {fmtDate(o.latestPeriod.startsAt)} – {fmtDate(o.latestPeriod.endsAt)}</span>],
-                  ["Funded budget", <span key="b" className="num">{fmtSol(o.latestPeriod.budget)}</span>],
-                  ["Status", o.latestPeriod.myStatus === "pending" ? <Badge key="s" tone="butter">Pending clearance</Badge> : <Badge key="s" tone="mint">Available</Badge>],
+                  ["Sent", <span key="t" className="num text-xs">{fmtDateTime(o.rewards.latestPayout.paidAt)}</span>],
+                  [
+                    "Transaction",
+                    <a key="s" href={o.rewards.latestPayout.explorerUrl} target="_blank" rel="noreferrer" className="text-coral hover:underline">
+                      View on Solscan
+                    </a>,
+                  ],
                 ]}
               />
             </>
           ) : (
-            <p className="text-sm text-muted">No reward period has been finalized yet.</p>
+            <p className="text-sm text-muted">No SOL has been sent to your linked wallets yet.</p>
           )}
         </Panel>
 
-        <Panel title="Next scheduled calculation" className="lg:col-span-4" id="next-title">
-          {o.nextCalculation ? (
+        <Panel title="Automatic payouts" className="lg:col-span-4" id="next-title">
+          {o.payouts.live ? (
             <>
-              <div className="num text-xl">{fmtDateTime(o.nextCalculation)}</div>
+              <div className="num text-xl">{o.payouts.nextCycleAt ? fmtDateTime(o.payouts.nextCycleAt) : "First run soon"}</div>
               <p className="mt-3 text-sm text-muted">
-                Period #{o.openPeriod?.seq} ends {fmtDateTime(o.openPeriod!.endsAt)}. The calculation runs once finalized chain
-                data is in. The amount depends on fees actually settled and may be zero. This is not a scheduled payment.
+                Every {o.payouts.intervalMinutes} minutes, {o.payouts.holderShareBps / 100}% of new creator fees is split
+                between all holders by average balance. The amount depends on real trading and may be zero.
               </p>
             </>
           ) : (
-            <p className="text-sm text-muted">No open period.</p>
+            <>
+              <Badge>Not live yet</Badge>
+              <p className="mt-3 text-sm text-muted">{o.payouts.blocker}</p>
+            </>
           )}
         </Panel>
 
@@ -173,12 +156,13 @@ export default async function OverviewPage() {
                 <div className="h-full rounded-full bg-gradient-to-r from-mint to-[#4fd1b0]" style={{ width: `${sel.progress * 100}%` }} />
               </div>
               <div className="mt-2 flex justify-between font-mono text-xs text-muted">
-                <span>{fmtSol(o.balances.payable)} / {fmtSol(sel.solPriceLamports)}</span>
-                <span>{sel.progress >= 1 ? "Enough SOL earned" : `${fmtSol(sel.solPriceLamports - o.balances.payable)} to go`}</span>
+                <span>{fmtSol(sel.earned)} earned / {fmtSol(sel.solPriceLamports)}</span>
+                <span>{sel.progress >= 1 ? "Enough SOL earned" : `${fmtSol(sel.solPriceLamports - sel.earned)} to go`}</span>
               </div>
               <p className="mt-4 text-xs text-muted">
-                {PLATFORM_LABEL[sel.platform]} · {REGION_LABEL[sel.region]}
-                {sel.isDemo && " · demo catalog item, illustrative cost"}
+                {sel.platform ? PLATFORM_LABEL[sel.platform] : "Platform not set"}
+                {sel.region ? ` · ${REGION_LABEL[sel.region]}` : ""}. Earned counts SOL paid and owed to your linked wallets;
+                cards themselves are paid in {brand.ticker}.
               </p>
             </>
           ) : (

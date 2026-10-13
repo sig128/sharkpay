@@ -46,7 +46,6 @@ const schema = z.object({
   FULFILLMENT_PROVIDER: z.enum(["none"]).default("none"),
   FULFILLMENT_WEBHOOK_SECRET: z.string().optional(),
 
-  CHAIN_INGEST_SECRET: z.string().optional(),
   TOKEN_MINT: z.string().optional(),
   MOONPAY_PUBLISHABLE_KEY: z.string().startsWith("pk_").optional(),
   SHARK_TREASURY_WALLET: z.string().optional(),
@@ -57,15 +56,30 @@ const schema = z.object({
   TOKEN_DECIMALS: z.coerce.number().int().min(0).max(12).default(6),
   TOKEN_PROGRAM: z.enum(["token-2022", "spl-token"]).default("token-2022"),
 
-  REWARD_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(200),
+  /** Token-level transfer fee (Token-2022 extension). pump.fun coins have none. */
+  TOKEN_TRANSFER_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(0),
+  /** Trading fee the coin charges on buys and sells; shown on the site only. */
+  TRADE_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(200),
   HOLDER_SHARE_BPS: z.coerce.number().int().min(0).max(10000).default(8000),
-  /** Wallet the operator sends SOL reward payouts from. Defaults to the treasury. */
-  REWARDS_PAYOUT_WALLET: z.string().optional(),
-  /** Bearer secret for the operator endpoint that records payouts already sent. */
-  PAYOUT_RECORDER_SECRET: z.string().min(32).optional(),
-  PENDING_CLEARANCE_HOURS: z.coerce.number().int().min(0).default(72),
-  PERIOD_LENGTH_DAYS: z.coerce.number().int().positive().default(7),
   MIN_ELIGIBLE_BALANCE: z.coerce.number().min(0).default(1000),
+
+  /** pump.fun creator wallet. Signs fee claims and holder payouts. Never logged. */
+  FEE_WALLET_SECRET_KEY: z.string().optional(),
+  /** Receives the non-holder share. Unset: that share stays in the fee wallet. */
+  OPS_WALLET: z.string().optional(),
+  AUTO_PAYOUTS_ENABLED: z
+    .enum(["true", "false", "1", "0", ""])
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  PAYOUT_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  SNAPSHOT_INTERVAL_MINUTES: z.coerce.number().int().min(1).max(60).default(5),
+  /** Below the ~0.00089 SOL rent minimum a transfer to an empty wallet fails. */
+  MIN_PAYOUT_LAMPORTS: z.coerce.number().int().min(900_000).default(1_000_000),
+  MAX_PAYOUT_PER_CYCLE_LAMPORTS: z.coerce.number().int().positive().default(50_000_000_000),
+  PRIORITY_FEE_MICROLAMPORTS: z.coerce.number().int().min(0).max(5_000_000).default(20_000),
+  PUMP_FEES_API_URL: z.string().url().default("https://fun-block.pump.fun"),
+  /** Bearer secret for the operator payout status / run-now endpoint. */
+  OPERATOR_SECRET: z.string().min(32).optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -120,7 +134,7 @@ export function integrations() {
         e.APPLE_WWDR_CERT_PATH,
     ),
     liveFulfillment: false as boolean,
-    chainIngest: Boolean(e.CHAIN_INGEST_SECRET && e.TOKEN_MINT),
+    autoPayouts: Boolean(e.AUTO_PAYOUTS_ENABLED && e.TOKEN_MINT && e.FEE_WALLET_SECRET_KEY),
     cardIssuer: false as boolean,
   };
 }

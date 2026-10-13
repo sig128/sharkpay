@@ -87,7 +87,7 @@ export function WalletLinker({
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted">No wallet linked. Link one to qualify for holder rewards from the next period.</p>
+        <p className="text-sm text-muted">No wallet linked. Holder wallets are paid automatically either way; link one to see its rewards here.</p>
       )}
 
       <div className="rounded-2xl border border-line bg-white/[0.02] p-4 text-xs leading-relaxed text-muted">

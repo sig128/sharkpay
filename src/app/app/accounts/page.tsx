@@ -22,7 +22,6 @@ const PROVIDER_LABEL: Record<string, string> = {
   google: "Google",
   x: "X",
   email: "Email",
-  demo: "Demo session",
 };
 
 function identityName(i: IdentityRow) {
@@ -37,10 +36,9 @@ function identityName(i: IdentityRow) {
 export default async function AccountsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { session, user } = await requirePageSession();
   const sp = await searchParams;
-  const demo = session.kind === "demo";
   const identities = listIdentities(user.id);
   const wallets = listWallets(user.id).map((w) => ({ id: w.id, address: maskAddress(w.address), verifiedAt: w.verified_at }));
-  const recent = !demo && isRecentlyAuthenticated(session);
+  const recent = isRecentlyAuthenticated(session);
   const i = integrations();
   const providers = gamingProviders();
   const has = (p: string) => identities.some((x) => x.provider === p);
@@ -123,11 +121,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
         </Panel>
 
         <Panel title="Security" className="lg:col-span-5" action={recent ? <Badge tone="mint">Recently confirmed</Badge> : undefined}>
-          {demo ? (
-            <p className="text-sm text-muted">
-              This is an isolated demo session. Linking real sign-in methods and recovery codes are disabled here.
-            </p>
-          ) : recent ? (
+          {recent ? (
             <p className="text-sm text-muted">You confirmed it&apos;s you in the last 10 minutes, so you can link or unlink accounts and wallets now.</p>
           ) : (
             <div className="space-y-3">
@@ -152,49 +146,43 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pro
                     {identityName(x)} · connected {fmtDate(x.created_at)}
                   </div>
                 </div>
-                {!demo && <UnlinkButton kind="identity" id={x.id} label={PROVIDER_LABEL[x.provider] ?? x.provider} disabled={!recent} />}
+                <UnlinkButton kind="identity" id={x.id} label={PROVIDER_LABEL[x.provider] ?? x.provider} disabled={!recent} />
               </li>
             ))}
           </ul>
-          {!demo && (
-            <div className="mt-5 space-y-3 border-t border-line pt-5">
-              <h3 className="text-sm font-semibold">Add a sign-in method</h3>
-              <div className="flex flex-wrap gap-2">
-                {linkable.map((l) =>
-                  recent ? (
-                    <a key={l.href} href={l.href} className={buttonClass("secondary", "sm")}>{l.label}</a>
-                  ) : (
-                    <span key={l.href} className={buttonClass("secondary", "sm", "pointer-events-none opacity-50")} aria-disabled="true">{l.label}</span>
-                  ),
-                )}
-                {providers
-                  .filter((p) => p.availability === "coming_soon")
-                  .map((p) => (
-                    <span key={p.id} className={buttonClass("ghost", "sm", "pointer-events-none opacity-60")} aria-disabled="true">
-                      {p.label}
-                    </span>
-                  ))}
-              </div>
-              {!has("email") && recent && <EmailCodeForm purpose="link" cta="Link email" devMode={i.emailDevOutbox} />}
+          <div className="mt-5 space-y-3 border-t border-line pt-5">
+            <h3 className="text-sm font-semibold">Add a sign-in method</h3>
+            <div className="flex flex-wrap gap-2">
+              {linkable.map((l) =>
+                recent ? (
+                  <a key={l.href} href={l.href} className={buttonClass("secondary", "sm")}>{l.label}</a>
+                ) : (
+                  <span key={l.href} className={buttonClass("secondary", "sm", "pointer-events-none opacity-50")} aria-disabled="true">{l.label}</span>
+                ),
+              )}
+              {providers
+                .filter((p) => p.availability === "coming_soon")
+                .map((p) => (
+                  <span key={p.id} className={buttonClass("ghost", "sm", "pointer-events-none opacity-60")} aria-disabled="true">
+                    {p.label}
+                  </span>
+                ))}
             </div>
-          )}
+            {!has("email") && recent && <EmailCodeForm purpose="link" cta="Link email" devMode={i.emailDevOutbox} />}
+          </div>
         </Panel>
 
         <Panel title="Solana wallets" className="lg:col-span-5">
-          <WalletLinker wallets={wallets} canChange={demo || recent} />
+          <WalletLinker wallets={wallets} canChange={recent} />
         </Panel>
 
-        {!demo && (
-          <Panel title="Account recovery" className="lg:col-span-7">
-            <RecoveryCodes remaining={recovery.remaining ?? 0} total={recovery.total} canGenerate={recent} />
-          </Panel>
-        )}
+        <Panel title="Account recovery" className="lg:col-span-7">
+          <RecoveryCodes remaining={recovery.remaining ?? 0} total={recovery.total} canGenerate={recent} />
+        </Panel>
 
-        <Panel title="Sessions" className={demo ? "lg:col-span-12" : "lg:col-span-5"}>
-          <p className="mb-4 text-sm text-muted">
-            {demo ? "End this demo session. Its sandbox data is discarded." : "Sign out on this device, or end every session on every device."}
-          </p>
-          <SignOutEverywhere demo={demo} />
+        <Panel title="Sessions" className="lg:col-span-5">
+          <p className="mb-4 text-sm text-muted">Sign out on this device, or end every session on every device.</p>
+          <SignOutEverywhere />
         </Panel>
       </div>
     </>

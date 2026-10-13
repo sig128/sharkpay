@@ -1,17 +1,19 @@
+import Link from "next/link";
 import { brand } from "@/config/brand";
-import { PreviewBadge } from "@/components/ui/Badges";
+import { Badge } from "@/components/ui/Badges";
 import { fmtDateTime, fmtInt, fmtSol } from "@/lib/format";
-import type { Transparency } from "@/lib/server/services/dashboard";
+import type { LandingPayouts } from "@/lib/server/services/public";
 
-export function Funding({ t }: { t: Transparency }) {
-  const s = t.settlement;
-  const max = Math.max(s.grossLamports, 1);
+export function Funding({ payouts: p }: { payouts: LandingPayouts }) {
+  const t = p.totals;
+  const toHolders = t.pool + t.owed + t.paidHolders;
+  const toOps = t.opsOwed + t.opsKept + t.paidOps;
+  const max = Math.max(t.received, 1);
   const rows = [
-    { label: "Settled gross proceeds", value: s.grossLamports, tone: "bg-white/25", note: `${fmtInt(t.tokens.sold)} ${brand.ticker} sold from collected fees` },
-    { label: "Swap, network and venue costs", value: -s.costsLamports, tone: "bg-[#ff6b6b]/60", note: "Actual deductions on settlement" },
-    { label: "Net settled proceeds", value: s.netLamports, tone: "bg-warm/70", note: "What funding is based on" },
-    { label: `Holder reward pool · ${t.config.holderShareBps / 100}%`, value: s.holderLamports, tone: "bg-sunset", note: `Backs ${fmtSol(t.rewards.funded)} of holder rewards` },
-    { label: `Operations & reserves · ${100 - t.config.holderShareBps / 100}%`, value: s.opsLamports, tone: "bg-lilac/70", note: "Infrastructure, fulfilment, support" },
+    { label: "Creator fees received", value: t.received, tone: "bg-white/25", note: "SOL claimed into the fee wallet from pump.fun" },
+    { label: `To holders · ${p.holderShareBps / 100}%`, value: toHolders, tone: "bg-sunset", note: "Split by average balance across every holder wallet" },
+    { label: `Operations · ${100 - p.holderShareBps / 100}%`, value: toOps, tone: "bg-lilac/70", note: "Infrastructure, fulfilment, support" },
+    { label: "Already sent to holders", value: t.paidHolders, tone: "bg-mint/70", note: "Confirmed SOL transfers on Solana" },
   ];
   return (
     <section id="transparency" className="relative scroll-mt-20 py-24 md:py-32" aria-labelledby="funding-title">
@@ -19,23 +21,24 @@ export function Funding({ t }: { t: Transparency }) {
         <div className="lg:col-span-5" data-reveal="left">
           <p className="eyebrow">Reward funding</p>
           <h2 id="funding-title" className="display mt-4 text-[clamp(3rem,7vw,5.5rem)]">
-            Every reward <span className="text-sunset-flow-soft">is backed.</span>
+            Real fees, <span className="text-sunset-flow-soft">real SOL.</span>
           </h2>
           <p className="mt-6 max-w-md text-lg text-muted">
-            SOL rewards are created only from fees that were actually collected and sold, never from trading volume,
-            projections or unsold tokens. Funded rewards are never more than the SOL set aside for them.
+            Holder rewards come only from the creator fees the fee wallet actually receives, never from projections or
+            token sales. Every payout is a public Solana transfer you can check yourself.
           </p>
           <div className="mt-8 rounded-2xl border border-line p-5 text-sm text-muted">
-            <div className="eyebrow mb-3">Demo configuration — not a deployed contract</div>
+            <div className="eyebrow mb-3">How payouts are set up</div>
             <ul className="space-y-1.5">
-              <li>Token-2022 transfer fee: <span className="num text-warm">{t.config.feeBps / 100}%</span> (illustrative)</li>
-              <li>Holder share of net settled proceeds: <span className="num text-warm">{t.config.holderShareBps / 100}%</span></li>
+              <li>Holder share of creator fees: <span className="num text-warm">{p.holderShareBps / 100}%</span></li>
+              <li>Payout run: every <span className="num text-warm">{p.intervalMinutes} minutes</span></li>
+              <li>Paid automatically once owed: <span className="num text-warm">{fmtSol(p.minPayoutLamports)}</span></li>
               <li>Rewards paid in: <span className="num text-warm">SOL</span></li>
-              <li>Pending clearance: <span className="num text-warm">{t.config.clearanceHours}h</span> · period length <span className="num text-warm">{t.config.periodDays} days</span></li>
             </ul>
             <p className="mt-3">
-              Transfer fees apply to every transfer, not only trades, and stay in tokens until they are settled. Fee and
-              withdrawal authorities are disclosed for the live mint before launch.
+              The coin&apos;s trading fee is shown as <span className="num text-warm">{p.tradeFeeBps / 100}%</span>, but
+              pump.fun sets the real fee and the creator&apos;s cut of it. Holders get {p.holderShareBps / 100}% of whatever
+              the fee wallet actually receives.
             </p>
           </div>
         </div>
@@ -44,17 +47,23 @@ export function Funding({ t }: { t: Transparency }) {
           <div className="panel p-6 md:p-8">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="font-semibold">Where rewards come from</h3>
-              <PreviewBadge label="Sample data" />
+              {p.live ? <Badge tone="mint">Live</Badge> : <Badge>Not live yet</Badge>}
             </div>
+            {!p.live && (
+              <p className="mt-4 rounded-xl bg-white/[0.03] p-4 text-sm text-muted">
+                Automatic payouts haven&apos;t started, so every figure is zero. They start once {brand.ticker} has launched
+                and the fee wallet is connected.
+              </p>
+            )}
             <ol className="mt-6 space-y-5" data-reveal-stagger="140">
               {rows.map((r) => (
                 <li key={r.label}>
                   <div className="flex items-baseline justify-between gap-4 text-sm">
                     <span className="font-medium">{r.label}</span>
-                    <span className="num text-warm">{r.value < 0 ? "−" : ""}{fmtSol(Math.abs(r.value))}</span>
+                    <span className="num text-warm">{fmtSol(r.value)}</span>
                   </div>
                   <div className="mt-2 h-2 rounded-full bg-white/[0.06]">
-                    <div className={`bar-grow h-full rounded-full ${r.tone}`} style={{ width: `${Math.max(1.5, (Math.abs(r.value) / max) * 100)}%` }} />
+                    <div className={`bar-grow h-full rounded-full ${r.tone}`} style={{ width: `${Math.max(1.5, (r.value / max) * 100)}%` }} />
                   </div>
                   <div className="mt-1.5 text-xs text-muted">{r.note}</div>
                 </li>
@@ -63,10 +72,10 @@ export function Funding({ t }: { t: Transparency }) {
 
             <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line md:grid-cols-4">
               {[
-                ["SOL funded", fmtSol(t.rewards.funded)],
-                ["Allocated to members", fmtSol(t.rewards.allocated)],
-                ["Unallocated (carried)", fmtSol(t.rewards.unallocated)],
-                ["Outstanding", fmtSol(t.rewards.outstanding)],
+                ["Received", fmtSol(t.received)],
+                ["Paid to holders", fmtSol(t.paidHolders)],
+                ["Owed, accumulating", fmtSol(t.owed)],
+                ["Wallets paid", fmtInt(t.holdersPaid)],
               ].map(([k, v]) => (
                 <div key={k} className="bg-surface p-4">
                   <dt className="text-xs text-muted">{k}</dt>
@@ -74,11 +83,28 @@ export function Funding({ t }: { t: Transparency }) {
                 </div>
               ))}
             </dl>
-            <div className="mt-4 rounded-xl bg-white/[0.03] p-4 text-sm text-muted">
-              <span className="text-warm">Token inventory is not cash.</span> {fmtInt(t.tokens.inventory)} {brand.ticker}{" "}
-              of collected fees haven&apos;t been sold yet, so they fund nothing until they are.
-            </div>
-            {t.lastUpdated && <p className="mt-4 font-mono text-xs text-muted">Sample data generated {fmtDateTime(t.lastUpdated)}</p>}
+
+            {p.recentPayouts.length > 0 && (
+              <ul className="mt-6 divide-y divide-line text-sm">
+                {p.recentPayouts.map((x) => (
+                  <li key={`${x.signature}:${x.wallet}`} className="flex items-center justify-between gap-3 py-2.5">
+                    <a href={x.explorerUrl} target="_blank" rel="noreferrer" className="num text-xs text-coral hover:underline">
+                      {x.masked}
+                    </a>
+                    <span className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-muted">{fmtDateTime(x.paidAt)}</span>
+                      <span className="num text-mint">+{fmtSol(x.lamports)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-4 font-mono text-xs text-muted">
+              {p.lastCycleAt ? `Last payout run ${fmtDateTime(p.lastCycleAt)}` : "No payout run yet"} ·{" "}
+              <Link href="/app/transparency" className="text-coral hover:underline">
+                Full report
+              </Link>
+            </p>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const url = env().APP_URL.replace(/\/$/, "");
   return [
     { url: `${url}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${url}/docs`, changeFrequency: "weekly", priority: 0.7 },
     { url: `${url}/login`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${url}/terms`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${url}/privacy`, changeFrequency: "yearly", priority: 0.2 },

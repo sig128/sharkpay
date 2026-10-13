@@ -8,7 +8,7 @@ vi.hoisted(() => {
   process.env.TOKEN_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
   process.env.SHARK_TREASURY_WALLET = "5f1oiop1b3Bxw8ppwbAECAVXq118mHGCVLEsp4EFPSxb";
   process.env.TOKEN_DECIMALS = "6";
-  process.env.REWARD_FEE_BPS = "200";
+  process.env.TOKEN_TRANSFER_FEE_BPS = "200";
   process.env.SHARK_MIN_LIQUIDITY_USD = "10000";
 });
 
@@ -18,11 +18,10 @@ vi.mock("@/lib/server/fulfillment/provider", async (orig) => {
   const mod = await orig<typeof import("@/lib/server/fulfillment/provider")>();
   const live = {
     id: "testdist",
-    simulated: false,
     submit: async () => delivered.next,
     status: async () => delivered.next,
   };
-  return { ...mod, providerFor: (realm: string) => (realm.startsWith("demo:") ? mod.demoProvider : live) };
+  return { ...mod, providerFor: () => live };
 });
 
 import { one, resetDbForTests, run } from "@/lib/server/db";
@@ -62,9 +61,9 @@ function seed() {
   }
   run(
     `INSERT INTO catalog_items (id, realm, sku, provider, provider_sku, name, tier, category, gta_amount, sol_price_lamports,
-      platform, game_version, region, stock, status, verified_live, is_demo, fulfillment_kind, updated_at)
+      platform, game_version, region, stock, status, verified_live, fulfillment_kind, updated_at)
      VALUES ('itm_bull', 'live', 'BULL-PS-US', 'testdist', 'D-BULL', 'Bull Shark Card', 'bull', 'shark_card', 600000, ${BULL_LAMPORTS},
-      'playstation', 'gtao_gtav', 'US', 3, 'available', 1, 0, 'code', ?)`,
+      'playstation', 'gtao_gtav', 'US', 3, 'available', 1, 'code', ?)`,
     now,
   );
 }
@@ -143,9 +142,8 @@ describe("price feed", () => {
 });
 
 describe("checkout availability", () => {
-  it("is on for demo sandboxes and for a configured live realm", () => {
-    expect(sharkCheckout("demo:abc")).toMatchObject({ enabled: true });
-    expect(sharkCheckout("live")).toMatchObject({ enabled: true, mint: MINT, treasury: TREASURY });
+  it("is on once the mint, treasury and a fulfilment provider are configured", () => {
+    expect(sharkCheckout()).toMatchObject({ enabled: true, mint: MINT, treasury: TREASURY });
   });
 });
 

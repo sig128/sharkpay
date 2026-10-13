@@ -1,5 +1,4 @@
-import { all, one, run } from "../db";
-import { randomId } from "../crypto";
+import { all, one } from "../db";
 
 export const PLATFORMS = {
   pc: { label: "PC", long: "PC" },
@@ -45,61 +44,11 @@ export interface CatalogItem {
   stock: number | null;
   status: "available" | "out_of_stock" | "unavailable";
   verified_live: number;
-  is_demo: number;
   fulfillment_kind: "code" | "instructions";
   updated_at: number;
 }
 
-/**
- * GTA$ denominations mirror the Shark Card tiers for GTA Online. SOL prices
- * are placeholders for the operator to set from distributor costs; every demo
- * row is flagged `is_demo`. A connected provider catalog replaces these rows.
- */
-export const DEMO_TIERS = [
-  { tier: "red", name: "Red Shark Card", gta: 100_000, lamports: 450_000_000 },
-  { tier: "tiger", name: "Tiger Shark Card", gta: 250_000, lamports: 750_000_000 },
-  { tier: "bull", name: "Bull Shark Card", gta: 600_000, lamports: 1_500_000_000 },
-  { tier: "great_white", name: "Great White Shark Card", gta: 1_250_000, lamports: 3_000_000_000 },
-  { tier: "whale", name: "Whale Shark Card", gta: 4_250_000, lamports: 7_500_000_000 },
-  { tier: "megalodon", name: "Megalodon Shark Card", gta: 10_000_000, lamports: 15_000_000_000 },
-] as const;
-
-export function seedDemoCatalog(realm: string, now = Date.now()) {
-  for (const t of DEMO_TIERS) {
-    for (const platform of Object.keys(PLATFORMS) as Platform[]) {
-      for (const region of Object.keys(REGIONS) as Region[]) {
-        const outOfStock = t.tier === "megalodon" && platform === "xbox";
-        const sku = `DEMO-${t.tier.toUpperCase()}-${platform.toUpperCase()}-${region}`;
-        run(
-          `INSERT OR IGNORE INTO catalog_items (id, realm, sku, provider, provider_sku, name, tier, category, gta_amount,
-            sol_price_lamports, retail_reference, platform, game_version, region, stock, status, verified_live, is_demo,
-            fulfillment_kind, updated_at)
-           VALUES (?, ?, ?, 'demo', ?, ?, ?, 'shark_card', ?, ?, NULL, ?, 'gtao_gtav', ?, ?, ?, 0, 1, 'code', ?)`,
-          randomId("itm"),
-          realm,
-          sku,
-          sku,
-          t.name,
-          t.tier,
-          t.gta,
-          t.lamports,
-          platform,
-          region,
-          outOfStock ? 0 : 25,
-          outOfStock ? "out_of_stock" : "available",
-          now,
-        );
-        run(
-          `UPDATE catalog_items SET sol_price_lamports = ?, updated_at = ? WHERE realm = ? AND sku = ? AND is_demo = 1`,
-          t.lamports,
-          now,
-          realm,
-          sku,
-        );
-      }
-    }
-  }
-}
+export { CARD_TIERS, cardTier, type CardTier } from "@/config/tiers";
 
 export interface CatalogFilter {
   platform?: string;
@@ -108,14 +57,10 @@ export interface CatalogFilter {
   category?: string;
 }
 
-/**
- * Live realms only ever see provider-verified rows. Demo realms see their own
- * demo rows. Unknown filter values simply match nothing.
- */
+/** Only provider-verified rows are listed. Unknown filter values simply match nothing. */
 export function listCatalog(realm: string, filter: CatalogFilter = {}): CatalogItem[] {
-  const where = ["realm = ?"];
+  const where = ["realm = ?", "verified_live = 1"];
   const params: unknown[] = [realm];
-  if (realm === "live") where.push("verified_live = 1 AND is_demo = 0");
   const columns = { platform: "platform", version: "game_version", region: "region", category: "category" } as const;
   for (const [key, column] of Object.entries(columns)) {
     const value = filter[key as keyof typeof columns];
@@ -132,13 +77,13 @@ export function listCatalog(realm: string, filter: CatalogFilter = {}): CatalogI
 
 export function getItem(realm: string, itemId: string): CatalogItem | undefined {
   const item = one<CatalogItem>(`SELECT * FROM catalog_items WHERE id = ? AND realm = ?`, itemId, realm);
-  if (item && realm === "live" && (!item.verified_live || item.is_demo)) return undefined;
+  if (item && !item.verified_live) return undefined;
   return item;
 }
 
 export function findTierItem(realm: string, tier: string, platform: string, region: string) {
   return one<CatalogItem>(
-    `SELECT * FROM catalog_items WHERE realm = ? AND tier = ? AND platform = ? AND region = ?`,
+    `SELECT * FROM catalog_items WHERE realm = ? AND tier = ? AND platform = ? AND region = ? AND verified_live = 1`,
     realm,
     tier,
     platform,

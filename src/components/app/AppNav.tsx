@@ -25,7 +25,7 @@ function Icon({ d }: { d: string }) {
 
 const isActive = (path: string, href: string) => (href === "/app" ? path === "/app" : path.startsWith(href));
 
-export function Sidebar({ name, avatarUrl, demo }: { name: string; avatarUrl: string | null; demo: boolean }) {
+export function Sidebar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   const path = usePathname();
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-[#0a0c15] px-4 py-5 lg:flex">
@@ -66,7 +66,7 @@ export function Sidebar({ name, avatarUrl, demo }: { name: string; avatarUrl: st
           <Avatar name={name} url={avatarUrl} />
           <span className="min-w-0">
             <span className="block truncate font-semibold text-warm">{name}</span>
-            <span className="block text-xs text-muted">{demo ? "Demo sandbox" : "Connected accounts"}</span>
+            <span className="block text-xs text-muted">Connected accounts</span>
           </span>
         </Link>
         <SignOutButton />

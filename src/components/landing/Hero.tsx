@@ -1,23 +1,14 @@
 import { brand } from "@/config/brand";
 import { Atmosphere } from "@/components/brand/Atmosphere";
 import { MembershipCard } from "@/components/brand/MembershipCard";
-import { PhoneFrame, WalletPass, type WalletPassData } from "@/components/brand/WalletPass";
+import { PhoneFrame, WalletPass } from "@/components/brand/WalletPass";
+import { showcasePass, type Showcase } from "@/components/brand/placeholders";
 import { ButtonLink } from "@/components/ui/Button";
-import { PreviewBadge } from "@/components/ui/Badges";
-import { fmtSol } from "@/lib/format";
+import { fmtInt, fmtSol } from "@/lib/format";
+import type { LandingPayouts } from "@/lib/server/services/public";
 import { HeroStage } from "@/components/landing/fx/HeroStage";
 import { Embers } from "@/components/landing/fx/Embers";
 import { Magnetic } from "@/components/landing/fx/Magnetic";
-
-export interface HeroSample {
-  memberName: string;
-  membershipId: string;
-  available: number;
-  pending: number;
-  selectedName: string;
-  selectedCost: number;
-  pass: WalletPassData;
-}
 
 type Vars = React.CSSProperties & Record<`--${string}`, string | number>;
 
@@ -42,8 +33,7 @@ function SplitLine({ text, delay, offset }: { text: string; delay: number; offse
   );
 }
 
-export function Hero({ sample }: { sample: HeroSample }) {
-  const progress = Math.min(1, sample.available / sample.selectedCost);
+export function Hero({ payouts, showcase }: { payouts: LandingPayouts; showcase: Showcase }) {
   return (
     <HeroStage className="relative isolate overflow-hidden pt-24 pb-16 md:pt-28 lg:min-h-[100svh] lg:pb-24" aria-labelledby="hero-title">
       {/* Synthwave sun sitting on the horizon */}
@@ -67,7 +57,7 @@ export function Hero({ sample }: { sample: HeroSample }) {
       <div className="container-site relative grid grid-cols-1 items-center gap-y-14 lg:grid-cols-12 lg:gap-x-8">
         <div className="hero-exit lg:col-span-6 xl:col-span-6">
           <p className="eyebrow reveal-up" style={{ "--d": "0ms" } as Vars}>
-            Hold {brand.ticker} · Collect funded rewards · Redeem for game credit
+            Hold {brand.ticker} · Get SOL from creator fees · Redeem for game credit
           </p>
           <h1
             id="hero-title"
@@ -91,7 +81,7 @@ export function Hero({ sample }: { sample: HeroSample }) {
             </Magnetic>
             <Magnetic strength={0.22}>
               <ButtonLink href="#wallet" size="lg" variant="secondary">
-                Preview your card
+                See your card
               </ButtonLink>
             </Magnetic>
           </div>
@@ -113,47 +103,43 @@ export function Hero({ sample }: { sample: HeroSample }) {
             <div className="depth absolute right-[2%] top-[0%] w-[34%] sm:w-[30%]" style={{ "--depth": 30, "--lift": -60 } as Vars}>
               <div className="bob rotate-[7deg] opacity-90" style={{ "--bob": "9s", "--bob-delay": "-3s" } as Vars}>
                 <PhoneFrame className="text-[7px] sm:text-[8px] lg:text-[9px]">
-                  <WalletPass data={sample.pass} fontSize="inherit" />
+                  <WalletPass data={showcasePass(showcase)} fontSize="inherit" />
                 </PhoneFrame>
               </div>
             </div>
             <div className="depth absolute left-[2%] top-[18%] w-[80%] sm:left-[4%] sm:w-[74%]" style={{ "--depth": 16, "--lift": -20 } as Vars}>
               <div className="bob" style={{ "--bob": "8s" } as Vars}>
-                <MembershipCard
-                  memberName={sample.memberName}
-                  membershipId={sample.membershipId}
-                  balance={sample.available}
-                  priority="hero"
-                />
+                <MembershipCard showcase={showcase} priority="hero" />
               </div>
             </div>
             <div className="depth absolute bottom-[1%] left-0 w-[46%] max-w-[230px]" style={{ "--depth": 44, "--lift": -110 } as Vars}>
               <div className="glass bob rounded-2xl p-3 sm:p-4" style={{ "--bob": "6s", "--bob-delay": "-1.5s" } as Vars}>
-                <div className="eyebrow !text-[0.6rem]">SOL rewards ready</div>
+                <div className="eyebrow !text-[0.6rem]">To holders</div>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="num text-xl font-medium text-warm sm:text-2xl">{fmtSol(sample.available, { unit: false })}</span>
-                  <span className="font-mono text-[0.65rem] text-muted">SOL</span>
+                  <span className="num text-xl font-medium text-warm sm:text-2xl">{payouts.holderShareBps / 100}%</span>
+                  <span className="font-mono text-[0.65rem] text-muted">of creator fees</span>
                 </div>
-                <div className="mt-1 font-mono text-[0.62rem] text-muted">+{fmtSol(sample.pending)} pending</div>
+                <div className="mt-1 font-mono text-[0.62rem] text-muted">Sent every {payouts.intervalMinutes} min</div>
               </div>
             </div>
             <div className="depth absolute bottom-[6%] right-0 w-[48%] max-w-[250px]" style={{ "--depth": 38, "--lift": -80 } as Vars}>
               <div className="glass bob rounded-2xl p-3 sm:p-4" style={{ "--bob": "7s", "--bob-delay": "-4s" } as Vars}>
-                <div className="eyebrow !text-[0.6rem]">Progress to reward</div>
-                <div className="mt-1 truncate text-sm font-semibold">{sample.selectedName}</div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} aria-label={`Progress toward ${sample.selectedName}`}>
-                  <div className="h-full rounded-full" style={{ width: `${progress * 100}%` }}>
-                    <div className="fill-reveal h-full rounded-full bg-mint shadow-[0_0_10px_rgb(116_233_206/0.9)]" />
-                  </div>
-                </div>
-                <div className="mt-1.5 font-mono text-[0.62rem] text-muted">
-                  {fmtSol(sample.available)} / {fmtSol(sample.selectedCost)}
-                </div>
+                <div className="eyebrow !text-[0.6rem]">Paid to holders</div>
+                {payouts.live ? (
+                  <>
+                    <div className="mt-1 num text-xl font-medium text-mint sm:text-2xl">{fmtSol(payouts.totals.paidHolders)}</div>
+                    <div className="mt-1 font-mono text-[0.62rem] text-muted">
+                      {fmtInt(payouts.totals.holdersPaid)} wallet{payouts.totals.holdersPaid === 1 ? "" : "s"} so far
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-1 text-sm font-semibold">Not live yet</div>
+                    <div className="mt-1 font-mono text-[0.62rem] text-muted">Starts when {brand.ticker} launches</div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
-          <div className="mt-5 flex justify-center lg:justify-end">
-            <PreviewBadge label="Product preview · sample data" />
           </div>
         </div>
       </div>

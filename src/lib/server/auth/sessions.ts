@@ -3,11 +3,10 @@ import { randomToken, sha256 } from "../crypto";
 
 export const SESSION_COOKIE = "sc_session";
 export const SESSION_TTL_MS = 14 * 24 * 3600 * 1000;
-export const DEMO_SESSION_TTL_MS = 24 * 3600 * 1000;
 /** Linking or unlinking identities and wallets requires a sign-in this recent. */
 export const REAUTH_WINDOW_MS = 10 * 60 * 1000;
 
-export type SessionKind = "real" | "demo";
+export type SessionKind = "real";
 
 export interface Session {
   idHash: string;
@@ -29,7 +28,7 @@ export function createSession(input: {
   const now = input.now ?? Date.now();
   const token = randomToken(32);
   const idHash = sha256(token);
-  const ttl = input.kind === "demo" ? DEMO_SESSION_TTL_MS : SESSION_TTL_MS;
+  const ttl = SESSION_TTL_MS;
   run(
     `INSERT INTO sessions (id_hash, user_id, realm, kind, auth_provider, auth_at, created_at, expires_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -68,7 +67,7 @@ export function resolveSession(token: string | undefined, now = Date.now()): Ses
     expires_at: number;
     revoked_at: number | null;
   }>(`SELECT * FROM sessions WHERE id_hash = ?`, sha256(token));
-  if (!row || row.revoked_at || row.expires_at <= now) return null;
+  if (!row || row.revoked_at || row.expires_at <= now || row.kind !== "real" || row.realm !== "live") return null;
   return {
     idHash: row.id_hash,
     userId: row.user_id,

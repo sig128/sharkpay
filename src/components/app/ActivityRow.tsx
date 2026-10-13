@@ -1,5 +1,5 @@
 import { clsx } from "clsx";
-import { fmtDateTime, fmtSol } from "@/lib/format";
+import { fmtDateTime } from "@/lib/format";
 
 export interface ActivityView {
   id: string;
@@ -7,37 +7,26 @@ export interface ActivityView {
   title: string;
   explanation: string;
   createdAt: number;
-  payableDelta: number;
-  pendingDelta: number;
-  paidDelta: number;
+  amount: string;
+  amountLabel: string;
+  positive: boolean;
   refType: string | null;
   refId: string | null;
+  explorerUrl: string | null;
   status: "completed" | "pending" | "reversed";
   detail?: Record<string, string | number | null>;
 }
 
 const kindTone: Record<string, string> = {
-  allocation: "bg-mint/15 text-mint",
-  clearance: "bg-mint/10 text-mint",
   payout: "bg-mint/15 text-mint",
-  funding: "bg-white/10 text-muted",
+  order: "bg-white/10 text-warm",
 };
 const kindGlyph: Record<string, string> = {
-  allocation: "+",
-  clearance: "✓",
   payout: "→",
+  order: "◆",
 };
 
-/** Headline SOL change for this ledger event. */
-export function primaryDelta(a: ActivityView) {
-  if (a.kind === "allocation") return { value: a.pendingDelta, label: "pending" };
-  if (a.kind === "clearance") return { value: a.payableDelta, label: "ready to pay out" };
-  if (a.kind === "payout") return { value: a.paidDelta || -a.payableDelta, label: "paid" };
-  return { value: a.payableDelta, label: "SOL" };
-}
-
 export function ActivityRow({ a, onOpen }: { a: ActivityView; onOpen?: () => void }) {
-  const d = primaryDelta(a);
   const content = (
     <>
       <span aria-hidden="true" className={clsx("flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", kindTone[a.kind])}>
@@ -52,11 +41,11 @@ export function ActivityRow({ a, onOpen }: { a: ActivityView; onOpen?: () => voi
         </span>
       </span>
       <span className="shrink-0 text-right">
-        <span className={clsx("num block text-sm", d.value > 0 ? "text-mint" : d.value < 0 ? "text-warm" : "text-muted")}>
-          {d.value > 0 ? "+" : d.value < 0 ? "−" : ""}
-          {fmtSol(Math.abs(d.value))}
+        <span className={clsx("num block text-sm", a.positive ? "text-mint" : "text-warm")}>
+          {a.positive ? "+" : ""}
+          {a.amount}
         </span>
-        <span className="block text-[0.7rem] text-muted">{d.label}</span>
+        <span className="block text-[0.7rem] text-muted">{a.amountLabel}</span>
       </span>
     </>
   );

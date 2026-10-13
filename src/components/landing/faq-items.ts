@@ -8,7 +8,11 @@ export const faqItems = [
   },
   {
     q: "Are rewards fixed or guaranteed?",
-    a: "No. Rewards depend on fees that were actually collected and settled in each period, and your share of eligible holdings. They vary and can be zero. There is no APY, fixed rate or promise of profit.",
+    a: "No. Rewards depend on the creator fees that trading actually generates, and on your share of the average holder balance. They vary and can be zero. There is no APY, fixed rate or promise of profit.",
+  },
+  {
+    q: "Do I need to link a wallet to get paid?",
+    a: `No. Every wallet holding ${brand.ticker} is paid automatically, linked or not. Linking a wallet to your account only shows its rewards and payouts here.`,
   },
   {
     q: "How are Shark Cards priced?",
